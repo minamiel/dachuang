@@ -1,0 +1,6 @@
+crop_name,source_image,x,y,w,h
+eval_001.png,C:\Users\Legion\Desktop\phone_photos\5A0A615FB9E9D55851E272B8D8219121.png,406,140,1047,895
+eval_002.png,C:\Users\Legion\Desktop\phone_photos\9cc0ba8573cd7a82022c71d394ab4a66.png,244,203,760,135
+eval_003.png,C:\Users\Legion\Desktop\phone_photos\C1D2E0D87F5CBD0A98AC21F509B185FC.png,785,374,467,357
+eval_004.png,C:\Users\Legion\Desktop\phone_photos\C3647FEB1DAF04E0737380CADA6CCBC4.png,228,752,448,279
+eval_005.png,C:\Users\Legion\Desktop\phone_photos\acf547c0ce814f2aac745a56c08032c1.png,369,331,367,106
