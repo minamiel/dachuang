@@ -2,6 +2,7 @@ import argparse
 import csv
 import json
 import os
+import sys
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
@@ -127,6 +128,33 @@ def _map_lang_for_paddle(lang: str) -> str:
     return mapping.get((lang or "").lower(), "ch")
 
 
+def _infer_default_ppocr_root() -> str:
+    """推断 PP-OCR 模型根目录。
+
+    优先级：
+    1) 环境变量 PPOCR_ROOT
+    2) 仓库根目录/PPOCRv5
+    3) 当前工作目录/PPOCRv5
+    4) /data/dachuang/TEST/PPOCRv5（服务器约定路径）
+    """
+    env_root = os.environ.get("PPOCR_ROOT")
+    candidates: List[Path] = []
+    if env_root:
+        candidates.append(Path(env_root))
+
+    repo_root = Path(__file__).resolve().parents[1]
+    candidates.append(repo_root / "PPOCRv5")
+    candidates.append(Path.cwd() / "PPOCRv5")
+    candidates.append(Path("/data/dachuang/TEST/PPOCRv5"))
+
+    for c in candidates:
+        if c.is_dir():
+            return str(c)
+
+    # 返回一个最常见默认值，后续由 _resolve_model_dir 报更详细错误
+    return str(repo_root / "PPOCRv5")
+
+
 def tesseract_ocr_text(image_bgr, lang: str) -> str:
     try:
         import pytesseract  # type: ignore
@@ -155,7 +183,9 @@ def build_paddle_ocr(
         from paddleocr import PaddleOCR  # type: ignore
     except Exception as err:
         raise RuntimeError(
-            "paddleocr is required. Install with: pip install paddleocr"
+            "paddleocr is required. Install with: pip install paddleocr. "
+            f"Current python: {sys.executable}. "
+            "Please ensure you run this script inside the same conda/venv where paddleocr is installed."
         ) from err
 
     resolved_det = _resolve_model_dir(
@@ -270,7 +300,7 @@ def main():
     parser.add_argument("--suffix", type=str, default="", help="Optional suffix in prediction names, e.g. _diffusion")
     parser.add_argument("--lang", type=str, default="ch", help="OCR language, e.g. ch/en (also supports eng/chi_sim aliases)")
     parser.add_argument("--ocr_backend", type=str, default="paddleocr", choices=["paddleocr", "tesseract"], help="OCR backend")
-    parser.add_argument("--ppocr_root", type=str, default="./PPOCRv5", help="PaddleOCR model root directory")
+    parser.add_argument("--ppocr_root", type=str, default=None, help="PaddleOCR model root directory (auto-detected if omitted)")
     parser.add_argument("--det_model_dir", type=str, default=None, help="Explicit det model dir; overrides auto-discovery in --ppocr_root")
     parser.add_argument("--rec_model_dir", type=str, default=None, help="Explicit rec model dir; overrides auto-discovery in --ppocr_root")
     parser.add_argument("--cls_model_dir", type=str, default=None, help="Explicit cls model dir; overrides auto-discovery in --ppocr_root")
@@ -280,6 +310,8 @@ def main():
     parser.add_argument("--output_csv", type=str, default="ocr_metrics_detail.csv", help="Per-sample output csv path")
     parser.add_argument("--output_json", type=str, default="ocr_metrics_summary.json", help="Summary output json path")
     args = parser.parse_args()
+    if args.ocr_backend == "paddleocr" and not args.ppocr_root:
+        args.ppocr_root = _infer_default_ppocr_root()
 
     if not os.path.isdir(args.pred_dir):
         raise FileNotFoundError(f"pred_dir not found: {args.pred_dir}")

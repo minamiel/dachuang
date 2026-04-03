@@ -383,6 +383,123 @@ python .\tools\evaluate_ocr_metrics.py --help
 
 ---
 
+### 9.7 服务器命令（你的场景：文件直接放在 `/data/dachuang/TEST`）
+
+> 你现在是把仓库内容平铺到 `TEST` 目录，这种情况下请在 `TEST` 目录直接执行以下命令。
+
+环境初始化：
+
+```bash
+cd /data/dachuang/TEST
+conda activate paddleocr
+export PPOCR_ROOT=/data/dachuang/TEST/PPOCRv5
+python -c "import sys; print(sys.executable)"
+```
+
+多人共用服务器时，先指定你要用的卡（示例 6 张）：
+
+```bash
+export CUDA_VISIBLE_DEVICES=0,1,2,4,5,7
+```
+
+DDP 训练（6 卡，如需更改卡数要更改`--nproc_per_node=`）：
+
+```bash
+torchrun --nproc_per_node=6 train_diffusion.py \
+	--ddp \
+	--dist_backend nccl \
+	--cond_mode concat \
+	--batch_size 16 \
+	--epochs 200 \
+	--scale 4 \
+	--hr_size 256 \
+	--train_size 256 \
+	--lr 8e-5 \
+	--lambda_seg 0.2 \
+	--num_workers 8 \
+	--hr_dir ./dataset_triplet/train/HR \
+	--lr_dir ./dataset_triplet/train/LR \
+	--mask_dir ./dataset_triplet/train/masks \
+	--save_dir ./model \
+	--experiment_name diffusion_ddp_6x4090 \
+	--save_best \
+	--save_every 5 \
+	--archive_every 20
+```
+
+DDP 续训（同一实验名）：
+
+```bash
+torchrun --nproc_per_node=6 train_diffusion.py \
+	--ddp \
+	--dist_backend nccl \
+	--resume \
+	--cond_mode concat \
+	--batch_size 16 \
+	--epochs 200 \
+	--scale 4 \
+	--hr_size 256 \
+	--train_size 256 \
+	--lr 8e-5 \
+	--lambda_seg 0.2 \
+	--num_workers 8 \
+	--hr_dir ./dataset_triplet/train/HR \
+	--lr_dir ./dataset_triplet/train/LR \
+	--mask_dir ./dataset_triplet/train/masks \
+	--save_dir ./model \
+	--experiment_name diffusion_ddp_6x4090 \
+	--save_best \
+	--save_every 5 \
+	--archive_every 20
+```
+
+推理（单卡）：
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python inference_diffusion.py \
+	-i ./eval_inputs \
+	-o ./eval_outputs/diffusion_ddp_6x4090 \
+	--model_path ./model/diffusion_ddp_6x4090_latest.pth \
+	--outscale 4 \
+	--timesteps 200 \
+	--target_min_side 384
+```
+
+统一画廊评测（PSNR/SSIM）：
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python ./tools/evaluate_text_models.py \
+	--input_dir ./eval_inputs \
+	--output_dir ./eval_outputs/cmp_ddp_6x4090 \
+	--methods bicubic,diffusion \
+	--outscale 4 \
+	--diffusion_model_path ./model/diffusion_ddp_6x4090_latest.pth \
+	--diffusion_outscale 4 \
+	--diffusion_steps 160 \
+	--diffusion_min_side 384 \
+	--diffusion_fallback_min_side 256
+```
+
+OCR 指标评测（PaddleOCR + GPU）：
+
+```bash
+python ./tools/evaluate_ocr_metrics.py \
+	--pred_dir ./eval_outputs/diffusion_ddp_6x4090 \
+	--gt_csv ./eval_inputs/labels.csv \
+	--image_col image \
+	--text_col text \
+	--suffix _diffusion \
+	--ocr_backend paddleocr \
+	--lang ch \
+	--device gpu \
+	--output_csv ./eval_outputs/ocr_metrics_detail.csv \
+	--output_json ./eval_outputs/ocr_metrics_summary.json
+```
+
+> 如果你不是 6 卡可用，请把 `--nproc_per_node` 改成实际可用卡数，并让 `CUDA_VISIBLE_DEVICES` 卡数量与之保持一致。
+
+---
+
 ## 10. OCR 指标评测（Acc / CER / WER）
 
 脚本：`tools/evaluate_ocr_metrics.py`
@@ -400,6 +517,19 @@ python -m pip install paddleocr
 ```
 
 > 若希望使用 GPU，请额外安装匹配 CUDA 的 `paddlepaddle-gpu` 版本。
+
+如果你的服务器目录结构是 `/data/dachuang/TEST`，推荐先激活环境并设置模型根目录：
+
+```bash
+cd /data/dachuang/TEST/dachuang-dachuang-text-enhancement
+conda activate paddleocr
+export PPOCR_ROOT=/data/dachuang/TEST/PPOCRv5
+python -c "import sys; print(sys.executable)"
+python -c "from paddleocr import PaddleOCR; print('paddleocr ok')"
+```
+
+> `tools/evaluate_ocr_metrics.py` 在未传 `--ppocr_root` 时会自动尝试：
+> 1) `$PPOCR_ROOT`  2) 仓库根目录 `PPOCRv5`  3) 当前目录 `PPOCRv5`  4) `/data/dachuang/TEST/PPOCRv5`。
 
 将 PP-OCRv5_server 模型放到 `./PPOCRv5`，建议目录示例：
 
@@ -427,6 +557,25 @@ python .\tools\evaluate_ocr_metrics.py `
 	--output_json .\eval_outputs\ocr_metrics_summary.json
 ```
 
+Linux 服务器示例（GPU）：
+
+```bash
+cd /data/dachuang/TEST/dachuang-dachuang-text-enhancement
+conda activate paddleocr
+export PPOCR_ROOT=/data/dachuang/TEST/PPOCRv5
+python ./tools/evaluate_ocr_metrics.py \
+	--pred_dir ./eval_outputs/diffusion_local_1to3h \
+	--gt_csv ./eval_inputs/labels.csv \
+	--image_col image \
+	--text_col text \
+	--suffix _diffusion \
+	--ocr_backend paddleocr \
+	--lang ch \
+	--device gpu \
+	--output_csv ./eval_outputs/ocr_metrics_detail.csv \
+	--output_json ./eval_outputs/ocr_metrics_summary.json
+```
+
 参数说明：
 
 - `--pred_dir`：预测图片目录
@@ -434,7 +583,7 @@ python .\tools\evaluate_ocr_metrics.py `
 - `--image_col` / `--text_col`：CSV 中图片列和文本列
 - `--suffix`：预测文件名后缀（例如 `eval_001_diffusion.png` 的 `_diffusion`）
 - `--ocr_backend`：OCR后端（默认 `paddleocr`，兼容 `tesseract`）
-- `--ppocr_root`：PP-OCR 模型根目录（默认 `./PPOCRv5`）
+- `--ppocr_root`：PP-OCR 模型根目录（可不填，脚本会自动探测：`$PPOCR_ROOT` → 仓库根目录 `PPOCRv5` → 当前目录 `PPOCRv5` → `/data/dachuang/TEST/PPOCRv5`）
 - `--det_model_dir` / `--rec_model_dir` / `--cls_model_dir`：显式指定模型目录（可选）
 - `--lang`：OCR语言（如 `ch`、`en`，也兼容 `eng`、`chi_sim`）
 - `--use_angle_cls`：启用方向分类器（推荐开启）
