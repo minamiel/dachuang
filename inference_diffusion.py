@@ -19,6 +19,15 @@ def smart_resize(img, target_min_side=256):
     return cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
 
 
+def upscale_input(img, outscale=4.0):
+    if outscale is None or outscale <= 1.0:
+        return img
+    h, w = img.shape[:2]
+    out_h = max(1, int(round(h * outscale)))
+    out_w = max(1, int(round(w * outscale)))
+    return cv2.resize(img, (out_w, out_h), interpolation=cv2.INTER_CUBIC)
+
+
 class DiffusionSampler:
     def __init__(self, num_timesteps=1000, device="cuda"):
         self.num_timesteps = num_timesteps
@@ -28,8 +37,12 @@ class DiffusionSampler:
         self.alpha_hat = torch.cumprod(self.alpha, dim=0)
 
     def sample_step(self, model, x, t, condition_img):
-        model_input = torch.cat((x, condition_img), dim=1)
-        predicted_noise, _ = model(model_input, t)
+        cond_mode = getattr(model, "cond_mode", "concat")
+        if cond_mode == "film":
+            predicted_noise, _ = model(x, t, cond=condition_img)
+        else:
+            model_input = torch.cat((x, condition_img), dim=1)
+            predicted_noise, _ = model(model_input, t)
 
         beta_t = self.beta[t][:, None, None, None]
         alpha_t = self.alpha[t][:, None, None, None]
@@ -59,15 +72,24 @@ def tensor_to_image(tensor):
     return cv2.cvtColor(result, cv2.COLOR_RGB2BGR)
 
 
-def build_model(model_path, device):
-    model = SimpleUNet().to(device)
-    model.load_state_dict(torch.load(model_path, map_location=device))
+def build_model(model_path, device, cond_mode="concat"):
+    ckpt = torch.load(model_path, map_location=device)
+    model_cfg = {}
+    model_state = ckpt
+    if isinstance(ckpt, dict) and "model_state" in ckpt:
+        model_state = ckpt["model_state"]
+        model_cfg = ckpt.get("config", {}) or {}
+
+    ckpt_cond_mode = model_cfg.get("cond_mode", cond_mode)
+    model = SimpleUNet(cond_mode=ckpt_cond_mode).to(device)
+    model.load_state_dict(model_state)
     model.eval()
     return model
 
 
-def restore_image(model, sampler, img_bgr, device, target_min_side, timesteps):
-    resized = smart_resize(img_bgr, target_min_side=target_min_side)
+def restore_image(model, sampler, img_bgr, device, target_min_side, timesteps, outscale=4.0):
+    sr_input = upscale_input(img_bgr, outscale=outscale)
+    resized = smart_resize(sr_input, target_min_side=target_min_side)
     condition = image_to_tensor(resized, device)
     current = torch.randn_like(condition)
 
@@ -93,9 +115,11 @@ def main():
     parser = argparse.ArgumentParser(description="Diffusion text-restoration inference for crop images.")
     parser.add_argument("-i", "--input", type=str, default="eval_inputs", help="Input image file or folder")
     parser.add_argument("-o", "--output", type=str, default="eval_outputs/diffusion", help="Output folder")
-    parser.add_argument("--model_path", type=str, default="diffusion_model_latest.pth", help="Path to diffusion checkpoint")
+    parser.add_argument("--model_path", type=str, default="model/diffusion_textzoom_bs8_latest.pth", help="Path to diffusion checkpoint")
     parser.add_argument("--timesteps", type=int, default=1000, help="Sampling steps")
     parser.add_argument("--target_min_side", type=int, default=256, help="Resize minimum side before inference")
+    parser.add_argument("--outscale", type=float, default=4.0, help="Fixed super-resolution scale factor")
+    parser.add_argument("--cond_mode", type=str, default="concat", choices=["concat", "film"], help="Fallback cond_mode when checkpoint has no config")
     parser.add_argument("--suffix", type=str, default="diffusion", help="Output suffix")
     parser.add_argument("--save_comparison", action="store_true", help="Save side-by-side input/output comparisons")
     args = parser.parse_args()
@@ -110,7 +134,7 @@ def main():
         raise FileNotFoundError(f"No images found under: {args.input}")
 
     print(f"Start diffusion inference | device={device} | images={len(paths)} | timesteps={args.timesteps}")
-    model = build_model(args.model_path, device)
+    model = build_model(args.model_path, device, cond_mode=args.cond_mode)
     sampler = DiffusionSampler(args.timesteps, device)
 
     for idx, path in enumerate(paths):
@@ -126,6 +150,7 @@ def main():
             device=device,
             target_min_side=args.target_min_side,
             timesteps=args.timesteps,
+            outscale=args.outscale,
         )
         imgname, ext = os.path.splitext(os.path.basename(path))
         output_path = os.path.join(args.output, f"{imgname}_{args.suffix}{ext or '.png'}")

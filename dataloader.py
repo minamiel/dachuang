@@ -56,7 +56,16 @@ class TextImageDataset(Dataset):
 # 适用于文本图像超分任务（例如 HR:256 -> LR:64）
 # ==========================================
 class TextSRDataset(Dataset):
-    def __init__(self, hr_dir, scale=4, hr_size=256, augment=False, blur_prob=0.5, noise_std=0.0):
+    def __init__(
+            self,
+            hr_dir,
+            lr_dir=None,
+            mask_dir=None,
+            scale=4,
+            hr_size=256,
+            augment=False,
+            blur_prob=0.5,
+            noise_std=0.0):
         """
         hr_dir: 存放 HR 图像的目录
         scale: 下采样倍率 (例如 4 表示 256 -> 64)
@@ -68,6 +77,9 @@ class TextSRDataset(Dataset):
         self.hr_dir = hr_dir
         self.file_names = [f for f in os.listdir(hr_dir) if
                            f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.bmp'))]
+        self.file_names.sort()
+        self.lr_dir = lr_dir
+        self.mask_dir = mask_dir
         self.scale = scale
         self.hr_size = hr_size if isinstance(hr_size, int) else hr_size[0]
         self.augment = augment
@@ -126,18 +138,49 @@ class TextSRDataset(Dataset):
                 _, bw = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
                 img_hr = cv2.cvtColor(bw, cv2.COLOR_GRAY2RGB)
 
-        img_hr, img_lr = self._make_lr(img_hr)
+        if self.lr_dir is not None:
+            lr_path = os.path.join(self.lr_dir, file_name)
+            img_lr = cv2.imread(lr_path)
+            if img_lr is None:
+                # 兼容后缀不一致，尝试同 stem 的其他后缀
+                stem = os.path.splitext(file_name)[0]
+                for ext in ['.png', '.jpg', '.jpeg', '.webp', '.bmp']:
+                    alt = os.path.join(self.lr_dir, stem + ext)
+                    img_lr = cv2.imread(alt)
+                    if img_lr is not None:
+                        break
+
+            if img_lr is None:
+                # LR 缺失时回退到在线退化，保证训练不中断
+                img_hr, img_lr = self._make_lr(img_hr)
+            else:
+                # 使用预生成 LR，同时统一尺寸
+                img_hr = cv2.resize(img_hr, (self.hr_size, self.hr_size), interpolation=cv2.INTER_CUBIC)
+                lr_size = self.hr_size // self.scale
+                img_lr = cv2.resize(img_lr, (lr_size, lr_size), interpolation=cv2.INTER_CUBIC)
+        else:
+            img_hr, img_lr = self._make_lr(img_hr)
 
         # 转为 Tensor 并归一化到 [-1, 1]
         img_lr_t = (torch.from_numpy(img_lr).permute(2, 0, 1).float() / 127.5) - 1.0
         img_hr_t = (torch.from_numpy(img_hr).permute(2, 0, 1).float() / 127.5) - 1.0
 
         # 新增：尝试加载对应的 mask（dataset/masks/<filename>），如果存在则返回 'mask'
-        mask_path_options = [
-            os.path.join(os.path.dirname(self.hr_dir), 'masks', file_name),  # sibling /dataset/masks
-            os.path.join(self.hr_dir, '..', 'masks', file_name),  # another attempt
-            os.path.join('dataset', 'masks', file_name)  # fallback
-        ]
+        if self.mask_dir is not None:
+            mask_path_options = [
+                os.path.join(self.mask_dir, file_name),
+                os.path.join(self.mask_dir, os.path.splitext(file_name)[0] + '.png'),
+                os.path.join(self.mask_dir, os.path.splitext(file_name)[0] + '.jpg'),
+                os.path.join(self.mask_dir, os.path.splitext(file_name)[0] + '.jpeg'),
+                os.path.join(self.mask_dir, os.path.splitext(file_name)[0] + '.bmp'),
+                os.path.join(self.mask_dir, os.path.splitext(file_name)[0] + '.webp'),
+            ]
+        else:
+            mask_path_options = [
+                os.path.join(os.path.dirname(self.hr_dir), 'masks', file_name),  # sibling /dataset/masks
+                os.path.join(self.hr_dir, '..', 'masks', file_name),  # another attempt
+                os.path.join('dataset', 'masks', file_name)  # fallback
+            ]
         mask_tensor = None
         for mp in mask_path_options:
             mp_abs = os.path.abspath(mp)
