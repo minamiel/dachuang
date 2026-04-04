@@ -346,15 +346,15 @@ torchrun --nproc_per_node=2 train_diffusion.py \
 ```shell
 CUDA_VISIBLE_DEVICES=0 python inference_diffusion.py \
   -i ./eval_inputs \
-  -o ./eval_outputs/enhance_x1 \
+  -o ./eval_outputs/enhance_x1_final \
   --model_path ./model/diffusion_x1_enhance_best.pth \
   --outscale 1 \
   --timesteps 120 \
   --target_min_side 256 \
   --strict_color_lock \
-  --luma_strength 0.8 \
-  --max_luma_delta 18 \
-  --enhance_strength 0.9
+  --luma_strength 1.0 \
+  --max_luma_delta 28 \
+  --enhance_strength 1.0
 ```
 
 #### 5.2.2 统一对比评测（画廊 + 指标）
@@ -369,7 +369,11 @@ CUDA_VISIBLE_DEVICES=0 python ./tools/evaluate_text_models.py \
   --diffusion_outscale 1 \
   --diffusion_steps 120 \
   --diffusion_min_side 256 \
-  --diffusion_fallback_min_side 192
+  --diffusion_fallback_min_side 192 \
+  --diffusion_strict_color_lock \
+  --diffusion_luma_strength 1.0 \
+  --diffusion_max_luma_delta 28 \
+  --diffusion_enhance_strength 1.0
 ```
 
 #### 5.2.3 OCR指标评测（Acc/CER/WER）

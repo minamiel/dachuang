@@ -181,6 +181,13 @@ def main():
     parser.add_argument("--diffusion_steps", type=int, default=1000, help="Diffusion sampling steps")
     parser.add_argument("--diffusion_min_side", type=int, default=256, help="Diffusion resize minimum side")
     parser.add_argument("--diffusion_outscale", type=float, default=4.0, help="Fixed output scale factor for diffusion inference")
+    parser.add_argument("--diffusion_preserve_color", action="store_true", help="Preserve color in diffusion output")
+    parser.add_argument("--diffusion_strict_color_lock", action="store_true", help="Use strict color lock for diffusion output")
+    parser.add_argument("--diffusion_luma_strength", type=float, default=1.0, help="Luma strength for strict color lock")
+    parser.add_argument("--diffusion_max_luma_delta", type=float, default=24.0, help="Max luma delta for strict color lock")
+    parser.add_argument("--diffusion_no_match_luma_stats", action="store_true", help="Disable luma stats matching in strict color lock")
+    parser.add_argument("--diffusion_enhance_strength", type=float, default=1.0, help="Blend strength between input and diffusion output")
+    parser.add_argument("--diffusion_decoder_attn", action="store_true", help="Enable decoder attention in diffusion model (high memory)")
     parser.add_argument(
         "--diffusion_fallback_min_side",
         type=int,
@@ -218,6 +225,7 @@ def main():
             args.diffusion_model_path,
             diffusion_device,
             cond_mode=args.diffusion_cond_mode,
+            use_decoder_attn=args.diffusion_decoder_attn,
         )
         diffusion_sampler = DiffusionSampler(args.diffusion_steps, diffusion_device)
     elif "diffusion" in methods:
@@ -287,6 +295,12 @@ def main():
                     target_min_side=args.diffusion_min_side,
                     timesteps=args.diffusion_steps,
                     outscale=args.diffusion_outscale,
+                    preserve_color=args.diffusion_preserve_color,
+                    enhance_strength=args.diffusion_enhance_strength,
+                    strict_color_lock=args.diffusion_strict_color_lock,
+                    luma_strength=args.diffusion_luma_strength,
+                    max_luma_delta=args.diffusion_max_luma_delta,
+                    match_luma_stats=(not args.diffusion_no_match_luma_stats),
                 )
             except RuntimeError as err:
                 msg = str(err).lower()
@@ -313,6 +327,12 @@ def main():
                         target_min_side=args.diffusion_fallback_min_side,
                         timesteps=args.diffusion_steps,
                         outscale=args.diffusion_outscale,
+                        preserve_color=args.diffusion_preserve_color,
+                        enhance_strength=args.diffusion_enhance_strength,
+                        strict_color_lock=args.diffusion_strict_color_lock,
+                        luma_strength=args.diffusion_luma_strength,
+                        max_luma_delta=args.diffusion_max_luma_delta,
+                        match_luma_stats=(not args.diffusion_no_match_luma_stats),
                     )
                 except RuntimeError as err_retry:
                     if "out of memory" not in str(err_retry).lower():
@@ -324,6 +344,7 @@ def main():
                             args.diffusion_model_path,
                             "cpu",
                             cond_mode=args.diffusion_cond_mode,
+                            use_decoder_attn=args.diffusion_decoder_attn,
                         )
                         diffusion_sampler_cpu = DiffusionSampler(args.diffusion_steps, "cpu")
 
@@ -335,6 +356,12 @@ def main():
                         target_min_side=args.diffusion_fallback_min_side,
                         timesteps=args.diffusion_steps,
                         outscale=args.diffusion_outscale,
+                        preserve_color=args.diffusion_preserve_color,
+                        enhance_strength=args.diffusion_enhance_strength,
+                        strict_color_lock=args.diffusion_strict_color_lock,
+                        luma_strength=args.diffusion_luma_strength,
+                        max_luma_delta=args.diffusion_max_luma_delta,
+                        match_luma_stats=(not args.diffusion_no_match_luma_stats),
                     )
             save_method_output(args.output_dir, "diffusion", base_name, diffusion_img)
             previews.append(add_label(resize_for_panel(diffusion_img, display_shape), "diffusion"))
