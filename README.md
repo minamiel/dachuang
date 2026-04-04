@@ -1,4 +1,4 @@
-# 文本图像超分（扩散模型）
+# 基于扩散模型的文本图像超分
 
 本仓库当前支持一条可在本地运行的完整流程：
 
@@ -7,6 +7,18 @@
 3. 训练扩散模型
 4. 推理并导出结果
 5. 使用统一脚本对比 `input_x4_nearest / bicubic / diffusion`
+
+---
+
+## 任务目标定义
+
+本项目是**基于扩散模型的文本图像超分辨率（Text Image Super-Resolution）**，目标不是只处理文字区域，而是：
+
+- 对整张低分辨率图像进行重建与增强（文字 + 背景同时提升）
+- 在整体增强的前提下，**优先保证文字区域的边缘、笔画与可读性**
+- 最终输出以“给人看”为导向：清晰度显著提升，同时尽量保持原图色彩与观感一致
+
+因此更准确地说：**整张图片都会变清晰，但文字区域清晰度提升是核心目标**。
 
 ---
 
@@ -107,48 +119,9 @@ dataset_triplet/
 
 ---
 
-## 4. 本地训练（1-3 小时模板）
+## 4.固定倍率超分（扩大分辨率）
 
-命令：
-
-```powershell
-python .\train_diffusion.py `
-	--cond_mode concat `
-	--batch_size 4 `
-	--epochs 30 `
-	--scale 4 `
-	--hr_size 128 `
-	--train_size 128 `
-	--lr 1e-4 `
-	--lambda_seg 0 `
-	--num_workers 2 `
-	--hr_dir .\dataset_triplet\train\HR `
-	--lr_dir .\dataset_triplet\train\LR `
-	--mask_dir .\dataset_triplet\train\masks `
-	--save_dir .\model `
-	--experiment_name diffusion_local_1to3h `
-	--save_best `
-	--save_every 2
-```
-
-参数说明：
-
-- `--cond_mode concat`：条件输入模式（推荐起步使用）
-- `--batch_size`：显存敏感参数，OOM 时优先减小
-- `--scale`：超分倍率（默认 4，可改为 2）
-- `--hr_size / --train_size`：训练分辨率
-- `--lambda_seg 0`：无可靠 mask 时建议先设 0
-- `--hr_dir / --lr_dir / --mask_dir`：三联数据目录
-- `--experiment_name`：输出模型文件名前缀
-- `--save_best`：保存训练损失最低的 best checkpoint
-
-训练产物示例：
-
-- `model/diffusion_local_1to3h_latest.pth`
-
----
-
-## 5. 推理
+> 默认**关闭** decoder attention（更省显存，推荐）。只有在显存充足时才加 `--decoder_attn`。
 
 ```powershell
 python .\inference_diffusion.py `
@@ -159,46 +132,290 @@ python .\inference_diffusion.py `
 	--timesteps 120
 ```
 
+> 根据需要修改模型名称
+
+### 4.0 指定要用的卡
+
+```bash
+export CUDA_VISIBLE_DEVICES=0,1,2,4,5,7
+```
+
+### 4.1 服务器 2卡 DDP 训练
+
+```bash
+torchrun --nproc_per_node=2 train_diffusion.py \
+	--ddp \
+	--dist_backend nccl \
+	--cond_mode concat \
+	--batch_size 16 \
+	--epochs 200 \
+	--scale 4 \
+	--hr_size 256 \
+	--train_size 256 \
+	--lr 8e-5 \
+	--lambda_seg 0.2 \
+	--num_workers 8 \
+	--hr_dir ./dataset_triplet/train/HR \
+	--lr_dir ./dataset_triplet/train/LR \
+	--mask_dir ./dataset_triplet/train/masks \
+	--save_dir ./model \
+	--experiment_name diffusion_ddp_6x4090 \
+	--save_best \
+	--save_every 5 \
+	--archive_every 20
+```
+
+### 4.2 服务器 2卡 DDP 续训
+
+```bash
+torchrun --nproc_per_node=2 train_diffusion.py \
+	--ddp \
+	--dist_backend nccl \
+	--resume \
+	--cond_mode concat \
+	--batch_size 16 \
+	--epochs 200 \
+	--scale 4 \
+	--hr_size 256 \
+	--train_size 256 \
+	--lr 8e-5 \
+	--lambda_seg 0.2 \
+	--num_workers 8 \
+	--hr_dir ./dataset_triplet/train/HR \
+	--lr_dir ./dataset_triplet/train/LR \
+	--mask_dir ./dataset_triplet/train/masks \
+	--save_dir ./model \
+	--experiment_name diffusion_ddp_6x4090 \
+	--save_best \
+	--save_every 5 \
+	--archive_every 20
+```
+
+
+### 4.3 服务器测试
+
+#### 4.3.1 单模型推理
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python inference_diffusion.py \
+	-i ./eval_inputs \
+	-o ./eval_outputs/diffusion_ddp_2x4090 \
+	--model_path ./model/diffusion_ddp_2x4090_best.pth \
+	--outscale 4 \
+	--timesteps 200 \
+	--target_min_side 384
+```
+
+- 质量优先：`timesteps=200~300`
+- 速度优先：`timesteps=80~120`
+
+
+
+#### 4.3.2 统一画廊评测（PSNR/SSIM）：
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python ./tools/evaluate_text_models.py \
+	--input_dir ./eval_inputs \
+	--output_dir ./eval_outputs/cmp_ddp_6x4090 \
+	--methods bicubic,diffusion \
+	--outscale 4 \
+	--diffusion_model_path ./model/diffusion_ddp_6x4090_latest.pth \
+	--diffusion_outscale 4 \
+	--diffusion_steps 160 \
+	--diffusion_min_side 384 \
+	--diffusion_fallback_min_side 256
+```
+
+#### 4.3.3 OCR 指标评测（PaddleOCR + GPU）：
+
+```bash
+python ./tools/evaluate_ocr_metrics.py \
+	--pred_dir ./eval_outputs/diffusion_ddp_6x4090 \
+	--gt_csv ./eval_inputs/labels.csv \
+	--image_col image \
+	--text_col text \
+	--suffix _diffusion \
+	--ocr_backend paddleocr \
+	--lang ch \
+	--device gpu \
+	--output_csv ./eval_outputs/ocr_metrics_detail.csv \
+	--output_json ./eval_outputs/ocr_metrics_summary.json
+```
+
+### 4.4 服务器统一评测
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python ./tools/evaluate_text_models.py \
+	--input_dir ./eval_inputs \
+	--output_dir ./eval_outputs/cmp_ddp_2x4090 \
+	--methods bicubic,diffusion \
+	--outscale 4 \
+	--diffusion_model_path ./model/diffusion_ddp_2x4090_best.pth \
+	--diffusion_outscale 4 \
+	--diffusion_steps 160 \
+	--diffusion_min_side 384 \
+	--diffusion_fallback_min_side 256
+```
+
+如果有 GT，可加：
+
+```bash
+--gt_dir ./eval_gt --metrics_csv metrics_ddp_6x4090.csv
+```
+
+---
+
+
+
+## 5. 同分辨率清晰化
+
+> 目标：保持原图尺寸与色彩风格，只提升清晰度。
+
+> 说明：如果你当前模型是用 `--scale 4` 训练得到，它可以用于 x1 清晰化，但并非目标完全对齐。
+> 若你的最终目标是“在原图基础上清晰化且尽量不改色”，建议专门训练一版 `--scale 1` 模型（见下文 5.3）。
+
+### 5.0 指定要用的卡
+
+```bash
+export CUDA_VISIBLE_DEVICES=0,1,2,4,5,7
+```
+
+### 5.1 服务器 x1 清晰化目标专用训练
+
+如果最终目标不是放大，而是“原图基础上清晰化”，建议数据与训练都按 x1 目标对齐：
+
+#### 5.1.1 数据集对齐
+
+```shell
+python .\tools\make_triplet_from_hr.py `
+	--hr_dir .\dataset\HR `
+	--out_root .\dataset_triplet_x1\train `
+	--scale 1
+```
+
+#### 5.1.2 单卡训练
+
+```shell
+python .\train_diffusion.py `
+	--cond_mode concat `
+	--batch_size 4 `
+	--epochs 200 `
+	--scale 1 `
+	--hr_size 128 `
+	--train_size 128 `
+	--lr 1e-4 `
+	--lambda_seg 0 `
+	--num_workers 2 `
+	--hr_dir .\dataset_triplet_x1\train\HR `
+	--lr_dir .\dataset_triplet_x1\train\LR `
+	--save_dir .\model `
+	--experiment_name diffusion_x1_enhance `
+	--save_best `
+	--save_every 2
+```
+
+#### 5.1.3 多卡训练
+
+```shell
+export CUDA_VISIBLE_DEVICES=0,1
+
+torchrun --nproc_per_node=2 train_diffusion.py \
+  --ddp \
+  --dist_backend nccl \
+  --cond_mode concat \
+  --batch_size 8 \
+  --epochs 120 \
+  --scale 1 \
+  --hr_size 128 \
+  --train_size 128 \
+  --lr 1e-4 \
+  --lambda_seg 0 \
+  --num_workers 4 \
+  --hr_dir ./dataset_triplet_x1/train/HR \
+  --lr_dir ./dataset_triplet_x1/train/LR \
+  --save_dir ./model \
+  --experiment_name diffusion_x1_enhance_ddp \
+  --save_best \
+  --save_every 2
+```
+
+### 5.2 测试
+
+#### 5.2.1 单模型推理测试
+
+```shell
+CUDA_VISIBLE_DEVICES=0 python inference_diffusion.py \
+  -i ./eval_inputs \
+  -o ./eval_outputs/enhance_x1 \
+  --model_path ./model/diffusion_x1_enhance_best.pth \
+  --outscale 1 \
+  --timesteps 120 \
+  --target_min_side 256 \
+  --strict_color_lock \
+  --luma_strength 0.8 \
+  --max_luma_delta 18 \
+  --enhance_strength 0.9
+```
+
+#### 5.2.2 统一对比评测（画廊 + 指标）
+
+```shell
+CUDA_VISIBLE_DEVICES=0 python ./tools/evaluate_text_models.py \
+  --input_dir ./eval_inputs \
+  --output_dir ./eval_outputs/cmp_x1 \
+  --methods bicubic,diffusion \
+  --outscale 1 \
+  --diffusion_model_path ./model/diffusion_x1_enhance_best.pth \
+  --diffusion_outscale 1 \
+  --diffusion_steps 120 \
+  --diffusion_min_side 256 \
+  --diffusion_fallback_min_side 192
+```
+
+#### 5.2.3 OCR指标评测（Acc/CER/WER）
+
+```shell
+conda activate paddleocr
+export PPOCR_ROOT=/data/dachuang/TEST/PPOCRv5
+
+python ./tools/evaluate_ocr_metrics.py \
+  --pred_dir ./eval_outputs/enhance_x1 \
+  --gt_csv ./eval_inputs/labels.csv \
+  --image_col image \
+  --text_col text \
+  --suffix _diffusion \
+  --ocr_backend paddleocr \
+  --lang ch \
+  --device gpu \
+  --output_csv ./eval_outputs/ocr_metrics_detail.csv \
+  --output_json ./eval_outputs/ocr_metrics_summary.json
+```
+
+---
+
 参数说明：
 
 - `-i`：输入图片目录
 - `-o`：输出目录
 - `--model_path`：训练得到的 checkpoint
-- `--outscale`：固定超分倍率
+- `--outscale`：输出倍率；`1` 表示同分辨率清晰化
 - `--timesteps`：采样步数（更高通常更慢但可能更好）
+- `--decoder_attn`：启用 decoder 注意力（显存开销极大，默认关闭）
+- `--preserve_color`：保留原图色彩（仅增强亮度细节）
+- `--strict_color_lock`：严格保色（锁定色彩通道，仅做受控亮度增强）
+- `--luma_strength`：严格保色下亮度增强强度（`0~1`）
+- `--max_luma_delta`：严格保色下每像素最大亮度变化（越小越接近原图色彩观感）
+- `--enhance_strength`：增强强度（`0~1`，推荐 `0.7~1.0`）
 
 ---
 
-## 6. 统一对比评测（输入放大 vs bicubic vs diffusion）
 
-```powershell
-python .\tools\evaluate_text_models.py `
-	--input_dir .\eval_inputs `
-	--output_dir .\eval_outputs\cmp_local `
-	--methods bicubic,diffusion `
-	--outscale 4 `
-	--diffusion_model_path .\model\diffusion_local_1to3h_latest.pth `
-	--diffusion_outscale 4 `
-	--diffusion_steps 80 `
-	--diffusion_min_side 256 `
-	--diffusion_fallback_min_side 192
-```
 
-打开对比图目录：
 
-```powershell
-Start-Process .\eval_outputs\cmp_local\comparisons
-```
-
-说明：
-
-- `--methods bicubic,diffusion`：只跑双三次 + 扩散，不依赖 `basicsr`
-- `--diffusion_min_side`：扩散推理尺度，过大可能 OOM
-- `--diffusion_fallback_min_side`：OOM 自动回退尺度
 
 ---
 
-## 7. 常见问题
+## 6. 常见问题
 
 ### Q1: `ModuleNotFoundError: basicsr`
 
@@ -224,125 +441,8 @@ python -m pip install basicsr
 - 评测提高采样步数（如 `diffusion_steps 120~200`）
 - 对比时重点看文字边缘、断笔、重影、可读性
 
----
 
-## 8. 最短复现路径
-
-```powershell
-conda activate pytorch
-python -m pip install -r requirements.txt
-python .\tools\extract_lmdb_images_generic.py --lmdb_dir .\TextZoom\train1 --out_dir .\dataset\HR --prefix train1 --only_hr
-python .\tools\extract_lmdb_images_generic.py --lmdb_dir .\TextZoom\train2 --out_dir .\dataset\HR --prefix train2 --only_hr
-python .\tools\make_triplet_from_hr.py --hr_dir .\dataset\HR --out_root .\dataset_triplet\train --scale 4
-python .\train_diffusion.py --cond_mode concat --batch_size 4 --epochs 30 --scale 4 --hr_size 128 --train_size 128 --lr 1e-4 --lambda_seg 0 --num_workers 2 --hr_dir .\dataset_triplet\train\HR --lr_dir .\dataset_triplet\train\LR --save_dir .\model --experiment_name diffusion_local_1to3h --save_every 2
-python .\tools\evaluate_text_models.py --input_dir .\eval_inputs --output_dir .\eval_outputs\cmp_local --methods bicubic,diffusion --outscale 4 --diffusion_model_path .\model\diffusion_local_1to3h_latest.pth --diffusion_outscale 4 --diffusion_steps 80 --diffusion_min_side 256 --diffusion_fallback_min_side 192
-```
-
-> 训练完成后会在 `./model` 下生成：
->
-> - `*_latest.pth`：最新 checkpoint
-> - `*_best.pth`：按最低 epoch 平均损失自动选择的最佳 checkpoint（需开启 `--save_best`）
-> - `*_train_log.csv`：训练日志（每 epoch）
-> - `*_summary.json`：实验摘要（best/loss/路径等）
-
----
-
-## 9. 服务器推荐命令
-
-> 说明：`train_diffusion.py` 已支持 `--ddp`，请使用 `torchrun` 启动多卡同步训练。
-
-### 9.1 6卡 DDP 训练（质量优先）
-
-```bash
-torchrun --nproc_per_node=6 train_diffusion.py \
-	--ddp \
-	--dist_backend nccl \
-	--cond_mode concat \
-	--batch_size 16 \
-	--epochs 200 \
-	--scale 4 \
-	--hr_size 256 \
-	--train_size 256 \
-	--lr 8e-5 \
-	--lambda_seg 0.2 \
-	--num_workers 8 \
-	--hr_dir ./dataset_triplet/train/HR \
-	--lr_dir ./dataset_triplet/train/LR \
-	--mask_dir ./dataset_triplet/train/masks \
-	--save_dir ./model \
-	--experiment_name diffusion_ddp_6x4090 \
-	--save_best \
-	--save_every 5 \
-	--archive_every 20
-```
-
-### 9.2 6卡 DDP 续训
-
-```bash
-torchrun --nproc_per_node=6 train_diffusion.py \
-	--ddp \
-	--dist_backend nccl \
-	--resume \
-	--cond_mode concat \
-	--batch_size 16 \
-	--epochs 200 \
-	--scale 4 \
-	--hr_size 256 \
-	--train_size 256 \
-	--lr 8e-5 \
-	--lambda_seg 0.2 \
-	--num_workers 8 \
-	--hr_dir ./dataset_triplet/train/HR \
-	--lr_dir ./dataset_triplet/train/LR \
-	--mask_dir ./dataset_triplet/train/masks \
-	--save_dir ./model \
-	--experiment_name diffusion_ddp_6x4090 \
-	--save_best \
-	--save_every 5 \
-	--archive_every 20
-```
-
----
-
-### 9.3 服务器测试（单模型推理）
-
-```bash
-CUDA_VISIBLE_DEVICES=0 python inference_diffusion.py \
-	-i ./eval_inputs \
-	-o ./eval_outputs/diffusion_ddp_6x4090 \
-	--model_path ./model/diffusion_ddp_6x4090_latest.pth \
-	--outscale 4 \
-	--timesteps 200 \
-	--target_min_side 384
-```
-
-- 质量优先：`timesteps=200~300`
-- 速度优先：`timesteps=80~120`
-
-### 9.4 服务器统一评测（推荐）
-
-```bash
-CUDA_VISIBLE_DEVICES=0 python ./tools/evaluate_text_models.py \
-	--input_dir ./eval_inputs \
-	--output_dir ./eval_outputs/cmp_ddp_6x4090 \
-	--methods bicubic,diffusion \
-	--outscale 4 \
-	--diffusion_model_path ./model/diffusion_ddp_6x4090_latest.pth \
-	--diffusion_outscale 4 \
-	--diffusion_steps 160 \
-	--diffusion_min_side 384 \
-	--diffusion_fallback_min_side 256
-```
-
-如果有 GT，可加：
-
-```bash
---gt_dir ./eval_gt --metrics_csv metrics_ddp_6x4090.csv
-```
-
----
-
-### 9.5 如何从当前实验选最佳
+### Q4: 如何从当前实验选最佳
 
 优先级建议：
 
@@ -350,9 +450,48 @@ CUDA_VISIBLE_DEVICES=0 python ./tools/evaluate_text_models.py \
 2. 人工目检：重点看文字边缘、断笔、重影、可读性
 3. 最终保留：`*_best.pth` + 对应训练命令（可复现）
 
+### Q5：统一对比评测参数
+
+说明：
+
+- `--methods bicubic,diffusion`：只跑双三次 + 扩散，不依赖 `basicsr`
+- `--diffusion_min_side`：扩散推理尺度，过大可能 OOM
+- `--diffusion_fallback_min_side`：OOM 自动回退尺度
+
+
+### Q6: 本次大创成员使用服务器的可能问题
+
+1. 由于权限问题以及默认入口问题，启动不了conda
+> 输入如下命令临时修改PATH、HOME
+```bash
+export PATH="/data/dachuang/TEST/miniconda3/bin:$PATH"
+export HOME=/data/dachuang/TEST
+```
+
+2. conda 显示装不了pytorch或使用不了pytorch等问题
+> 输入如下命令使用已配置好的env
+```bash
+echo 'export HOME=/data/dachuang' >> ~/.bashrc
+
+echo 'export PATH=/data/dachuang/.local/bin:$PATH' >> ~/.bashrc
+
+echo 'export LD_LIBRARY_PATH=/data/dachuang/envs/realesrgan/lib/python3.8/site-packages/nvidia/nvjitlink/lib:/data/dachuang/envs/realesrgan/lib/python3.8/site-packages/nvidia/cusparse/lib:$LD_LIBRARY_PATH' >> ~/.bashrc
+
+# 激活 base（可能是无pytorch的）
+source ~/.bashrc
+
+# 激活 realesrgan
+source /data/dachuang/envs/realesrgan/bin/activate
+```
+
+3. 由于疏忽以及权限问题，导致可能出现同时激活两个环境如`(realesrgan)(base)$`
+只需要输入 `conda deactivate` 即可关闭 `(base)` 环境。
+
+已配置好的pytorch等工具是在环境 `realesrgan` 中的。
+
 ---
 
-### 9.6 服务器环境一键检查清单（GPU）
+## 7. 服务器环境一键检查清单（GPU）
 
 > 目标：在开跑训练/评测前，快速确认驱动、CUDA、Python 环境、Torch/Paddle GPU 能力和 PP-OCRv5 模型目录是否就绪。
 
@@ -383,124 +522,8 @@ python .\tools\evaluate_ocr_metrics.py --help
 
 ---
 
-### 9.7 服务器命令（你的场景：文件直接放在 `/data/dachuang/TEST`）
 
-> 你现在是把仓库内容平铺到 `TEST` 目录，这种情况下请在 `TEST` 目录直接执行以下命令。
-
-环境初始化：
-
-```bash
-cd /data/dachuang/TEST
-conda activate paddleocr
-export PPOCR_ROOT=/data/dachuang/TEST/PPOCRv5
-python -c "import sys; print(sys.executable)"
-```
-
-多人共用服务器时，先指定你要用的卡（示例 6 张）：
-
-```bash
-export CUDA_VISIBLE_DEVICES=0,1,2,4,5,7
-```
-
-DDP 训练（6 卡，如需更改卡数要更改`--nproc_per_node=`）：
-
-```bash
-torchrun --nproc_per_node=6 train_diffusion.py \
-	--ddp \
-	--dist_backend nccl \
-	--cond_mode concat \
-	--batch_size 16 \
-	--epochs 200 \
-	--scale 4 \
-	--hr_size 256 \
-	--train_size 256 \
-	--lr 8e-5 \
-	--lambda_seg 0.2 \
-	--num_workers 8 \
-	--hr_dir ./dataset_triplet/train/HR \
-	--lr_dir ./dataset_triplet/train/LR \
-	--mask_dir ./dataset_triplet/train/masks \
-	--save_dir ./model \
-	--experiment_name diffusion_ddp_6x4090 \
-	--save_best \
-	--save_every 5 \
-	--archive_every 20
-```
-
-DDP 续训（同一实验名）：
-
-```bash
-torchrun --nproc_per_node=6 train_diffusion.py \
-	--ddp \
-	--dist_backend nccl \
-	--resume \
-	--cond_mode concat \
-	--batch_size 16 \
-	--epochs 200 \
-	--scale 4 \
-	--hr_size 256 \
-	--train_size 256 \
-	--lr 8e-5 \
-	--lambda_seg 0.2 \
-	--num_workers 8 \
-	--hr_dir ./dataset_triplet/train/HR \
-	--lr_dir ./dataset_triplet/train/LR \
-	--mask_dir ./dataset_triplet/train/masks \
-	--save_dir ./model \
-	--experiment_name diffusion_ddp_6x4090 \
-	--save_best \
-	--save_every 5 \
-	--archive_every 20
-```
-
-推理（单卡）：
-
-```bash
-CUDA_VISIBLE_DEVICES=0 python inference_diffusion.py \
-	-i ./eval_inputs \
-	-o ./eval_outputs/diffusion_ddp_6x4090 \
-	--model_path ./model/diffusion_ddp_6x4090_latest.pth \
-	--outscale 4 \
-	--timesteps 200 \
-	--target_min_side 384
-```
-
-统一画廊评测（PSNR/SSIM）：
-
-```bash
-CUDA_VISIBLE_DEVICES=0 python ./tools/evaluate_text_models.py \
-	--input_dir ./eval_inputs \
-	--output_dir ./eval_outputs/cmp_ddp_6x4090 \
-	--methods bicubic,diffusion \
-	--outscale 4 \
-	--diffusion_model_path ./model/diffusion_ddp_6x4090_latest.pth \
-	--diffusion_outscale 4 \
-	--diffusion_steps 160 \
-	--diffusion_min_side 384 \
-	--diffusion_fallback_min_side 256
-```
-
-OCR 指标评测（PaddleOCR + GPU）：
-
-```bash
-python ./tools/evaluate_ocr_metrics.py \
-	--pred_dir ./eval_outputs/diffusion_ddp_6x4090 \
-	--gt_csv ./eval_inputs/labels.csv \
-	--image_col image \
-	--text_col text \
-	--suffix _diffusion \
-	--ocr_backend paddleocr \
-	--lang ch \
-	--device gpu \
-	--output_csv ./eval_outputs/ocr_metrics_detail.csv \
-	--output_json ./eval_outputs/ocr_metrics_summary.json
-```
-
-> 如果你不是 6 卡可用，请把 `--nproc_per_node` 改成实际可用卡数，并让 `CUDA_VISIBLE_DEVICES` 卡数量与之保持一致。
-
----
-
-## 10. OCR 指标评测（Acc / CER / WER）
+## 8. 关于 OCR 指标评测的说明
 
 脚本：`tools/evaluate_ocr_metrics.py`
 
@@ -593,3 +616,4 @@ python ./tools/evaluate_ocr_metrics.py \
 
 - `ocr_metrics_detail.csv`：每张图的 `pred_text / gt_text / CER / WER / exact_match`
 - `ocr_metrics_summary.json`：整体 `accuracy / CER / WER / 样本数`
+

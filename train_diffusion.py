@@ -220,6 +220,7 @@ def train(
     save_every=10,
     archive_every=100,
     save_best=True,
+    decoder_attn=False,
     ddp=False,
     dist_backend="nccl",
 ):
@@ -263,6 +264,7 @@ def train(
                 "archive_every": archive_every,
                 "ddp": ddp,
                 "world_size": world_size,
+                "decoder_attn": decoder_attn,
             },
         }
         torch.save(payload, path)
@@ -299,7 +301,8 @@ def train(
         print(
             f"Start diffusion training | device={device_name} | cond_mode={cond_mode} | "
             f"batch={batch_size} | epochs={epochs} | hr_size={hr_size} | train_size={train_size} | "
-            f"lambda_seg={lambda_seg} | scale={scale} | ddp={is_distributed} | world_size={world_size}"
+            f"lambda_seg={lambda_seg} | scale={scale} | decoder_attn={decoder_attn} | "
+            f"ddp={is_distributed} | world_size={world_size}"
         )
 
     dataset, dataloader, pin_memory, train_sampler = build_dataloader(
@@ -323,12 +326,30 @@ def train(
         print(f"Checkpoint latest path={latest_path}")
 
     # 构建条件 U-Net
-    model = SimpleUNet(cond_mode=cond_mode).to(device_name)
+    model = SimpleUNet(cond_mode=cond_mode, use_decoder_attn=decoder_attn).to(device_name)
+
+    # DDP 关键：当未启用分割监督时，seg_head 参数不会参与 loss，需冻结以避免未使用参数报错
+    use_seg_supervision = (lambda_seg > 0) and (mask_dir is not None)
+    if not use_seg_supervision and hasattr(model, "seg_head"):
+        for p in model.seg_head.parameters():
+            p.requires_grad = False
+        if is_main_process:
+            print(
+                "Segmentation supervision disabled (lambda_seg<=0 or mask_dir missing). "
+                "Frozen seg_head parameters to avoid DDP unused-parameter reduction errors."
+            )
+
     if is_distributed:
-        model = DDP(model, device_ids=[local_rank], output_device=local_rank)
+        model = DDP(
+            model,
+            device_ids=[local_rank],
+            output_device=local_rank,
+            find_unused_parameters=(not use_seg_supervision),
+        )
 
     # AdamW：对扩散训练通常比较稳定
-    optimizer = optim.AdamW(model.parameters(), lr=lr)
+    trainable_params = [p for p in model.parameters() if p.requires_grad]
+    optimizer = optim.AdamW(trainable_params, lr=lr)
     # 扩散主损失：预测噪声的 MSE
     loss_fn = nn.MSELoss()
     # 分割辅助损失：Focal
@@ -343,7 +364,14 @@ def train(
         model_to_load = model.module if isinstance(model, DDP) else model
         model_to_load.load_state_dict(ckpt["model_state"])
         if ckpt.get("optimizer_state"):
-            optimizer.load_state_dict(ckpt["optimizer_state"])
+            try:
+                optimizer.load_state_dict(ckpt["optimizer_state"])
+            except ValueError as err:
+                if is_main_process:
+                    print(
+                        "Warning: optimizer state mismatch while resuming. "
+                        f"Reason: {err}. Continue with freshly initialized optimizer."
+                    )
         start_epoch = int(ckpt.get("epoch", -1)) + 1
         ckpt_cfg: Optional[Dict[str, Any]] = ckpt.get("config") or {}
         ckpt_cond_mode = ckpt_cfg.get("cond_mode", "unknown")
@@ -438,9 +466,12 @@ def train(
                 # 总损失 = 扩散损失 + λ * 分割损失
                 total_loss = diffusion_loss + lambda_seg * seg_loss
             else:
+                # 关键：DDP 下即便该 batch 没有有效 mask，也要让 seg 分支参与计算图。
+                # 否则会出现“上一轮梯度归约未完成（unused params）”错误。
+                seg_stub = 0.0 * mask_pred.mean()
                 # 未启用分割监督时，seg_loss 仅用于日志展示
                 seg_loss = torch.tensor(0.0, device=device_name)
-                total_loss = diffusion_loss
+                total_loss = diffusion_loss + seg_stub
 
             # 标准反向传播
             optimizer.zero_grad()
@@ -530,6 +561,11 @@ if __name__ == "__main__":
     parser.add_argument("--resume", action="store_true")
     # 分割辅助损失权重，0 表示关闭
     parser.add_argument("--lambda_seg", type=float, default=0.0, help="Segmentation loss weight")
+    parser.add_argument(
+        "--decoder_attn",
+        action="store_true",
+        help="Enable decoder self-attention (higher quality but much higher memory); default is off for OOM safety",
+    )
     # DataLoader 并行读取线程数
     parser.add_argument("--num_workers", type=int, default=4, help="DataLoader workers for Linux training")
     # 数据目录（HR 文本图）
@@ -573,6 +609,7 @@ if __name__ == "__main__":
         resume=args.resume,
         device=args.device,
         lambda_seg=args.lambda_seg,
+    decoder_attn=args.decoder_attn,
         num_workers=args.num_workers,
         hr_dir=args.hr_dir,
         lr_dir=args.lr_dir,

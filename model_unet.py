@@ -204,7 +204,7 @@ class TextConditionModule(nn.Module):
 
 # --- 3. 核心 UNet ---
 class SimpleUNet(nn.Module):
-    def __init__(self, cond_mode='concat', cond_dim=128, text_dim=None):
+    def __init__(self, cond_mode='concat', cond_dim=128, text_dim=None, use_decoder_attn=True):
         """
         cond_mode: 'concat' (简单通道拼接) 或 'film' (先编码 cond -> 向量，再用 FiLM 调制)
         cond_dim: 当使用 film 时，cond encoder 输出的维度
@@ -221,6 +221,7 @@ class SimpleUNet(nn.Module):
         self.cond_mode = cond_mode
         self.cond_dim = cond_dim
         self.text_dim = text_dim
+        self.use_decoder_attn = use_decoder_attn
 
         # 时间编码器
         self.time_mlp = nn.Sequential(
@@ -270,7 +271,10 @@ class SimpleUNet(nn.Module):
 
         # 在 decoder 的前两层加入自注意力以增强中程信息（可根据显存调整/关闭）
         attn_up_channels = (up_channels[1], up_channels[2])  # 512, 256
-        self.attn_ups = nn.ModuleList([SelfAttention2d(ch, heads=4) for ch in attn_up_channels])  # // 新增：自注意力模块 (decoder)
+        if self.use_decoder_attn:
+            self.attn_ups = nn.ModuleList([SelfAttention2d(ch, heads=4) for ch in attn_up_channels])  # // 新增：自注意力模块 (decoder)
+        else:
+            self.attn_ups = nn.ModuleList()
 
         # 文本条件模块（简化版 MoM, FiLM）
         if text_dim is not None:
@@ -326,7 +330,7 @@ class SimpleUNet(nn.Module):
             x = up(x, t, cond_vec)
 
             # 在前两层 decoder 上应用文本调制和自注意力（如果启用）
-            if i < len(self.attn_ups):
+            if self.use_decoder_attn and i < len(self.attn_ups):
                 if text_emb is not None and self.text_cond_ups is not None:
                     # // 新增：在 decoder 层应用文本 FiLM 条件（简化版 MoM）
                     x = self.text_cond_ups[i](text_emb, x)
