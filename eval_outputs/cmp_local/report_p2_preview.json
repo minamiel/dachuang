@@ -1,0 +1,21 @@
+{
+  "generated_at": "2026-04-06T13:48:29.582687Z",
+  "title": "Text Enhancement Evaluation Report",
+  "output_dir": "E:\\code\\DaChuang\\dachuang-dachuang-text-enhancement\\eval_outputs\\cmp_local",
+  "summary_json": null,
+  "report_html": "E:\\code\\DaChuang\\dachuang-dachuang-text-enhancement\\eval_outputs\\cmp_local\\report_p2_preview.html",
+  "weights": {
+    "ssim": 0.45000000000000007,
+    "lpips": 0.25000000000000006,
+    "psnr": 0.20000000000000004,
+    "speed": 0.10000000000000002
+  },
+  "leaderboard": [],
+  "method_scores": {},
+  "method_avg_sec": {},
+  "baseline_report_json": null,
+  "baseline_deltas": [],
+  "ocr_summary_json": null,
+  "ocr_detail_csv": null,
+  "history_json": "E:\\code\\DaChuang\\dachuang-dachuang-text-enhancement\\eval_outputs\\cmp_local\\report_history.json"
+}

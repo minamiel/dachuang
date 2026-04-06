@@ -1,272 +1,489 @@
-<p align="center">
-  <img src="assets/realesrgan_logo.png" height=120>
-</p>
+# 基于扩散模型的文本图像超分辨率
 
-## <div align="center"><b><a href="README.md">English</a> | <a href="README_CN.md">简体中文</a></b></div>
+> 超越 Final2x 的扩散模型文本图像增强方案
 
-<div align="center">
+本项目是一个基于扩散模型的文本图像超分辨率（Text Image Super-Resolution）系统，专门针对文本图像进行优化，在整体增强的前提下**优先保证文字区域的边缘、笔画与可读性**。与传统的插值方法（如双三次插值）和现有工具（如 Final2x）相比，本方案利用扩散模型生成更清晰、更自然的文本细节，显著提升 OCR 准确率和视觉质量。
 
-👀[**Demos**](#-demos-videos) **|** 🚩[**Updates**](#-updates) **|** ⚡[**Usage**](#-quick-inference) **|** 🏰[**Model Zoo**](docs/model_zoo.md) **|** 🔧[Install](#-dependencies-and-installation)  **|** 💻[Train](docs/Training.md) **|** ❓[FAQ](docs/FAQ.md) **|** 🎨[Contribution](docs/CONTRIBUTING.md)
+## ✨ 主要特性
 
-[![download](https://img.shields.io/github/downloads/xinntao/Real-ESRGAN/total.svg)](https://github.com/xinntao/Real-ESRGAN/releases)
-[![PyPI](https://img.shields.io/pypi/v/realesrgan)](https://pypi.org/project/realesrgan/)
-[![Open issue](https://img.shields.io/github/issues/xinntao/Real-ESRGAN)](https://github.com/xinntao/Real-ESRGAN/issues)
-[![Closed issue](https://img.shields.io/github/issues-closed/xinntao/Real-ESRGAN)](https://github.com/xinntao/Real-ESRGAN/issues)
-[![LICENSE](https://img.shields.io/github/license/xinntao/Real-ESRGAN.svg)](https://github.com/xinntao/Real-ESRGAN/blob/master/LICENSE)
-[![python lint](https://github.com/xinntao/Real-ESRGAN/actions/workflows/pylint.yml/badge.svg)](https://github.com/xinntao/Real-ESRGAN/blob/master/.github/workflows/pylint.yml)
-[![Publish-pip](https://github.com/xinntao/Real-ESRGAN/actions/workflows/publish-pip.yml/badge.svg)](https://github.com/xinntao/Real-ESRGAN/blob/master/.github/workflows/publish-pip.yml)
+- **扩散模型驱动**: 使用条件扩散模型进行图像超分，生成高质量细节
+- **文本优先优化**: 在整体增强的基础上，特别优化文字区域的可读性
+- **灵活的推理预设**: 提供 `fast`、`balanced`、`best` 以及专为文本设计的 `text-*` 预设
+- **完整的评估体系**: 支持 PSNR、SSIM、LPIPS 等图像质量指标，以及 OCR CER/WER 等文本可读性指标
+- **易用的统一入口**: `run_all.py` 脚本提供训练、推理、评估、报告生成等一站式功能
+- **多 GPU 训练支持**: 支持 DDP 分布式训练，充分利用服务器硬件资源
+- **可视化报告**: 自动生成 HTML 报告，包含对比画廊和详细指标分析
 
-</div>
+## 🆚 与 Final2x 对比
 
-🔥 **AnimeVideo-v3 model (动漫视频小模型)**. Please see [[*anime video models*](docs/anime_video_model.md)] and [[*comparisons*](docs/anime_comparisons.md)]<br>
-🔥 **RealESRGAN_x4plus_anime_6B** for anime images **(动漫插图模型)**. Please see [[*anime_model*](docs/anime_model.md)]
+| 特性 | 本项目 | Final2x |
+|------|--------|---------|
+| 核心算法 | 扩散模型（生成式） | 传统超分模型（如 Real-ESRGAN） |
+| 文本优化 | 专门针对文字区域优化 | 通用图像增强 |
+| 细节生成 | 生成更自然的细节和纹理 | 可能产生伪影或过度平滑 |
+| 可读性提升 | 显著改善文字边缘和笔画连续性 | 有限改进 |
+| 评估指标 | 同时关注图像质量和 OCR 准确率 | 主要关注视觉质量 |
+| 灵活性 | 多档预设，可平衡速度与质量 | 固定模型和参数 |
 
-<!-- 1. You can try in our website: [ARC Demo](https://arc.tencent.com/en/ai-demos/imgRestore) (now only support RealESRGAN_x4plus_anime_6B) -->
-1. :boom: **Update** online Replicate demo: [![Replicate](https://img.shields.io/static/v1?label=Demo&message=Replicate&color=blue)](https://replicate.com/xinntao/realesrgan)
-1. Online Colab demo for Real-ESRGAN: [![Colab](https://img.shields.io/static/v1?label=Demo&message=Colab&color=orange)](https://colab.research.google.com/drive/1k2Zod6kSHEvraybHl50Lys0LerhyTMCo?usp=sharing) **|** Online Colab demo for for Real-ESRGAN (**anime videos**): [![Colab](https://img.shields.io/static/v1?label=Demo&message=Colab&color=orange)](https://colab.research.google.com/drive/1yNl9ORUxxlL4N0keJa2SEPB61imPQd1B?usp=sharing)
-1. Portable [Windows](https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-windows.zip) / [Linux](https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-ubuntu.zip) / [MacOS](https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-macos.zip) **executable files for Intel/AMD/Nvidia GPU**. You can find more information [here](#portable-executable-files-ncnn). The ncnn implementation is in [Real-ESRGAN-ncnn-vulkan](https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan)
-<!-- 1. You can watch enhanced animations in [Tencent Video](https://v.qq.com/s/topic/v_child/render/fC4iyCAM.html). 欢迎观看[腾讯视频动漫修复](https://v.qq.com/s/topic/v_child/render/fC4iyCAM.html) -->
+## 🚀 快速开始
 
-Real-ESRGAN aims at developing **Practical Algorithms for General Image/Video Restoration**.<br>
-We extend the powerful ESRGAN to a practical restoration application (namely, Real-ESRGAN), which is trained with pure synthetic data.
-
-🌌 Thanks for your valuable feedbacks/suggestions. All the feedbacks are updated in [feedback.md](docs/feedback.md).
-
----
-
-If Real-ESRGAN is helpful, please help to ⭐ this repo or recommend it to your friends 😊 <br>
-Other recommended projects:<br>
-▶️ [GFPGAN](https://github.com/TencentARC/GFPGAN): A practical algorithm for real-world face restoration <br>
-▶️ [BasicSR](https://github.com/xinntao/BasicSR): An open-source image and video restoration toolbox<br>
-▶️ [facexlib](https://github.com/xinntao/facexlib): A collection that provides useful face-relation functions.<br>
-▶️ [HandyView](https://github.com/xinntao/HandyView): A PyQt5-based image viewer that is handy for view and comparison <br>
-▶️ [HandyFigure](https://github.com/xinntao/HandyFigure): Open source of paper figures <br>
-
----
-
-### 📖 Real-ESRGAN: Training Real-World Blind Super-Resolution with Pure Synthetic Data
-
-> [[Paper](https://arxiv.org/abs/2107.10833)] &emsp; [[YouTube Video](https://www.youtube.com/watch?v=fxHWoDSSvSc)] &emsp; [[B站讲解](https://www.bilibili.com/video/BV1H34y1m7sS/)] &emsp; [[Poster](https://xinntao.github.io/projects/RealESRGAN_src/RealESRGAN_poster.pdf)] &emsp; [[PPT slides](https://docs.google.com/presentation/d/1QtW6Iy8rm8rGLsJ0Ldti6kP-7Qyzy6XL/edit?usp=sharing&ouid=109799856763657548160&rtpof=true&sd=true)]<br>
-> [Xintao Wang](https://xinntao.github.io/), Liangbin Xie, [Chao Dong](https://scholar.google.com.hk/citations?user=OSDCB0UAAAAJ), [Ying Shan](https://scholar.google.com/citations?user=4oXBp9UAAAAJ&hl=en) <br>
-> [Tencent ARC Lab](https://arc.tencent.com/en/ai-demos/imgRestore); Shenzhen Institutes of Advanced Technology, Chinese Academy of Sciences
-
-<p align="center">
-  <img src="assets/teaser.jpg">
-</p>
-
----
-
-<!---------------------------------- Updates --------------------------->
-## 🚩 Updates
-
-- ✅ Add the **realesr-general-x4v3** model - a tiny small model for general scenes. It also supports the **-dn** option to balance the noise (avoiding over-smooth results). **-dn** is short for denoising strength.
-- ✅ Update the **RealESRGAN AnimeVideo-v3** model. Please see [anime video models](docs/anime_video_model.md) and [comparisons](docs/anime_comparisons.md) for more details.
-- ✅ Add small models for anime videos. More details are in [anime video models](docs/anime_video_model.md).
-- ✅ Add the ncnn implementation [Real-ESRGAN-ncnn-vulkan](https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan).
-- ✅ Add [*RealESRGAN_x4plus_anime_6B.pth*](https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth), which is optimized for **anime** images with much smaller model size. More details and comparisons with [waifu2x](https://github.com/nihui/waifu2x-ncnn-vulkan) are in [**anime_model.md**](docs/anime_model.md)
-- ✅ Support finetuning on your own data or paired data (*i.e.*, finetuning ESRGAN). See [here](docs/Training.md#Finetune-Real-ESRGAN-on-your-own-dataset)
-- ✅ Integrate [GFPGAN](https://github.com/TencentARC/GFPGAN) to support **face enhancement**.
-- ✅ Integrated to [Huggingface Spaces](https://huggingface.co/spaces) with [Gradio](https://github.com/gradio-app/gradio). See [Gradio Web Demo](https://huggingface.co/spaces/akhaliq/Real-ESRGAN). Thanks [@AK391](https://github.com/AK391)
-- ✅ Support arbitrary scale with `--outscale` (It actually further resizes outputs with `LANCZOS4`). Add *RealESRGAN_x2plus.pth* model.
-- ✅ [The inference code](inference_realesrgan.py) supports: 1) **tile** options; 2) images with **alpha channel**; 3) **gray** images; 4) **16-bit** images.
-- ✅ The training codes have been released. A detailed guide can be found in [Training.md](docs/Training.md).
-
----
-
-<!---------------------------------- Demo videos --------------------------->
-## 👀 Demos Videos
-
-#### Bilibili
-
-- [大闹天宫片段](https://www.bilibili.com/video/BV1ja41117zb)
-- [Anime dance cut 动漫魔性舞蹈](https://www.bilibili.com/video/BV1wY4y1L7hT/)
-- [海贼王片段](https://www.bilibili.com/video/BV1i3411L7Gy/)
-
-#### YouTube
-
-## 🔧 Dependencies and Installation
-
-- Python >= 3.7 (Recommend to use [Anaconda](https://www.anaconda.com/download/#linux) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html))
-- [PyTorch >= 1.7](https://pytorch.org/)
-
-### Installation
-
-1. Clone repo
-
-    ```bash
-    git clone https://github.com/xinntao/Real-ESRGAN.git
-    cd Real-ESRGAN
-    ```
-
-1. Install dependent packages
-
-    ```bash
-    # Install basicsr - https://github.com/xinntao/BasicSR
-    # We use BasicSR for both training and inference
-    pip install basicsr
-    # facexlib and gfpgan are for face enhancement
-    pip install facexlib
-    pip install gfpgan
-    pip install -r requirements.txt
-    python setup.py develop
-    ```
-
----
-
-## ⚡ Quick Inference
-
-There are usually three ways to inference Real-ESRGAN.
-
-1. [Online inference](#online-inference)
-1. [Portable executable files (NCNN)](#portable-executable-files-ncnn)
-1. [Python script](#python-script)
-
-### Online inference
-
-1. You can try in our website: [ARC Demo](https://arc.tencent.com/en/ai-demos/imgRestore) (now only support RealESRGAN_x4plus_anime_6B)
-1. [Colab Demo](https://colab.research.google.com/drive/1k2Zod6kSHEvraybHl50Lys0LerhyTMCo?usp=sharing) for Real-ESRGAN **|** [Colab Demo](https://colab.research.google.com/drive/1yNl9ORUxxlL4N0keJa2SEPB61imPQd1B?usp=sharing) for Real-ESRGAN (**anime videos**).
-
-### Portable executable files (NCNN)
-
-You can download [Windows](https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-windows.zip) / [Linux](https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-ubuntu.zip) / [MacOS](https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-macos.zip) **executable files for Intel/AMD/Nvidia GPU**.
-
-This executable file is **portable** and includes all the binaries and models required. No CUDA or PyTorch environment is needed.<br>
-
-You can simply run the following command (the Windows example, more information is in the README.md of each executable files):
+### 安装依赖
 
 ```bash
-./realesrgan-ncnn-vulkan.exe -i input.jpg -o output.png -n model_name
+# 创建并激活 Conda 环境（推荐）
+conda create -n text-enhance python=3.9
+conda activate text-enhance
+
+# 安装 PyTorch（根据你的 CUDA 版本）
+conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia
+
+# 安装项目依赖
+pip install -r requirements.txt
 ```
 
-We have provided five models:
+### 基本使用（使用预训练模型）
 
-1. realesrgan-x4plus  (default)
-2. realesrnet-x4plus
-3. realesrgan-x4plus-anime (optimized for anime images, small model size)
-4. realesr-animevideov3 (animation video)
-
-You can use the `-n` argument for other models, for example, `./realesrgan-ncnn-vulkan.exe -i input.jpg -o output.png -n realesrnet-x4plus`
-
-#### Usage of portable executable files
-
-1. Please refer to [Real-ESRGAN-ncnn-vulkan](https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan#computer-usages) for more details.
-1. Note that it does not support all the functions (such as `outscale`) as the python script `inference_realesrgan.py`.
-
-```console
-Usage: realesrgan-ncnn-vulkan.exe -i infile -o outfile [options]...
-
-  -h                   show this help
-  -i input-path        input image path (jpg/png/webp) or directory
-  -o output-path       output image path (jpg/png/webp) or directory
-  -s scale             upscale ratio (can be 2, 3, 4. default=4)
-  -t tile-size         tile size (>=32/0=auto, default=0) can be 0,0,0 for multi-gpu
-  -m model-path        folder path to the pre-trained models. default=models
-  -n model-name        model name (default=realesr-animevideov3, can be realesr-animevideov3 | realesrgan-x4plus | realesrgan-x4plus-anime | realesrnet-x4plus)
-  -g gpu-id            gpu device to use (default=auto) can be 0,1,2 for multi-gpu
-  -j load:proc:save    thread count for load/proc/save (default=1:2:2) can be 1:2,2,2:2 for multi-gpu
-  -x                   enable tta mode"
-  -f format            output image format (jpg/png/webp, default=ext/png)
-  -v                   verbose output
+1. **单图像增强**：
+```bash
+python run_all.py enhance \
+  -i eval_inputs \
+  -o eval_outputs/enhanced \
+  --preset text-balanced
 ```
 
-Note that it may introduce block inconsistency (and also generate slightly different results from the PyTorch implementation), because this executable file first crops the input image into several tiles, and then processes them separately, finally stitches together.
-
-### Python script
-
-#### Usage of python script
-
-1. You can use X4 model for **arbitrary output size** with the argument `outscale`. The program will further perform cheap resize operation after the Real-ESRGAN output.
-
-```console
-Usage: python inference_realesrgan.py -n RealESRGAN_x4plus -i infile -o outfile [options]...
-
-A common command: python inference_realesrgan.py -n RealESRGAN_x4plus -i infile --outscale 3.5 --face_enhance
-
-  -h                   show this help
-  -i --input           Input image or folder. Default: inputs
-  -o --output          Output folder. Default: results
-  -n --model_name      Model name. Default: RealESRGAN_x4plus
-  -s, --outscale       The final upsampling scale of the image. Default: 4
-  --suffix             Suffix of the restored image. Default: out
-  -t, --tile           Tile size, 0 for no tile during testing. Default: 0
-  --face_enhance       Whether to use GFPGAN to enhance face. Default: False
-  --fp32               Use fp32 precision during inference. Default: fp16 (half precision).
-  --ext                Image extension. Options: auto | jpg | png, auto means using the same extension as inputs. Default: auto
+2. **批量对比评估**：
+```bash
+python run_all.py compare \
+  --input_dir eval_inputs \
+  --output_dir eval_outputs/comparison \
+  --preset text-balanced
 ```
 
-#### Inference general images
+3. **生成评估报告**：
+```bash
+python run_all.py report \
+  --output_dir eval_outputs/comparison \
+  --summary_json comparison_summary.json \
+  --report_html report.html
+```
 
-Download pre-trained models: [RealESRGAN_x4plus.pth](https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth)
+## 📦 安装指南
+
+### 环境要求
+
+- Python 3.8+
+- PyTorch 1.7+（支持 CUDA）
+- GPU 内存 ≥ 8GB（训练），≥ 4GB（推理）
+
+### 完整安装步骤
 
 ```bash
-wget https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth -P weights
+# 1. 克隆仓库
+git clone https://github.com/your-username/dachuang-dachuang-text-enhancement.git
+cd dachuang-dachuang-text-enhancement
+
+# 2. 创建 Conda 环境
+conda create -n text-enhance python=3.9
+conda activate text-enhance
+
+# 3. 安装 PyTorch（示例为 CUDA 12.1）
+conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia
+
+# 4. 安装项目依赖
+pip install -r requirements.txt
+
+# 5. 安装 PaddleOCR（用于 OCR 评估，可选）
+pip install paddleocr
+# 注意：如需 GPU 支持，需额外安装 paddlepaddle-gpu
 ```
 
-Inference!
+## 📊 数据准备
+
+### TextZoom 数据集
+
+本项目使用 TextZoom 数据集进行训练。如果你有 TextZoom 数据集的 LMDB 文件，可以按以下步骤提取：
 
 ```bash
-python inference_realesrgan.py -n RealESRGAN_x4plus -i inputs --face_enhance
+# 提取 train1 的 HR 图像
+python tools/extract_lmdb_images_generic.py \
+  --lmdb_dir TextZoom/train1 \
+  --out_dir dataset/HR \
+  --prefix train1 \
+  --only_hr
+
+# 提取 train2 的 HR 图像
+python tools/extract_lmdb_images_generic.py \
+  --lmdb_dir TextZoom/train2 \
+  --out_dir dataset/HR \
+  --prefix train2 \
+  --only_hr
 ```
 
-Results are in the `results` folder
-
-#### Inference anime images
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/xinntao/public-figures/master/Real-ESRGAN/cmp_realesrgan_anime_1.png">
-</p>
-
-Pre-trained models: [RealESRGAN_x4plus_anime_6B](https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth)<br>
- More details and comparisons with [waifu2x](https://github.com/nihui/waifu2x-ncnn-vulkan) are in [**anime_model.md**](docs/anime_model.md)
+### 生成训练三联数据（HR/LR/masks）
 
 ```bash
-# download model
-wget https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth -P weights
-# inference
-python inference_realesrgan.py -n RealESRGAN_x4plus_anime_6B -i inputs
+# 生成 x4 超分训练数据
+python tools/make_triplet_from_hr.py \
+  --hr_dir dataset/HR \
+  --out_root dataset_triplet/train \
+  --scale 4
+
+# 如果有关联的 mask 数据
+python tools/make_triplet_from_hr.py \
+  --hr_dir dataset/HR \
+  --mask_dir dataset/masks \
+  --out_root dataset_triplet/train \
+  --scale 4
 ```
 
-Results are in the `results` folder
+输出目录结构：
+```
+dataset_triplet/
+  train/
+    HR/      # 高分辨率图像
+    LR/      # 低分辨率图像（Real-ESRGAN 风格退化）
+    masks/   # 文字区域掩码（可选）
+```
 
----
+## 🏋️ 训练指南
 
-## BibTeX
+### 单 GPU 训练
 
-    @InProceedings{wang2021realesrgan,
-        author    = {Xintao Wang and Liangbin Xie and Chao Dong and Ying Shan},
-        title     = {Real-ESRGAN: Training Real-World Blind Super-Resolution with Pure Synthetic Data},
-        booktitle = {International Conference on Computer Vision Workshops (ICCVW)},
-        date      = {2021}
+```bash
+python train_diffusion.py \
+  --cond_mode concat \
+  --batch_size 4 \
+  --epochs 200 \
+  --scale 4 \
+  --hr_size 256 \
+  --train_size 256 \
+  --lr 1e-4 \
+  --lambda_seg 0.2 \
+  --num_workers 4 \
+  --hr_dir dataset_triplet/train/HR \
+  --lr_dir dataset_triplet/train/LR \
+  --mask_dir dataset_triplet/train/masks \
+  --save_dir model \
+  --experiment_name diffusion_textzoom_bs8 \
+  --save_best \
+  --save_every 5
+```
+
+### 多 GPU 分布式训练（DDP）
+
+```bash
+# 2 卡训练示例
+torchrun --nproc_per_node=2 train_diffusion.py \
+  --ddp \
+  --dist_backend nccl \
+  --cond_mode concat \
+  --batch_size 16 \
+  --epochs 200 \
+  --scale 4 \
+  --hr_size 256 \
+  --train_size 256 \
+  --lr 8e-5 \
+  --lambda_seg 0.2 \
+  --num_workers 8 \
+  --hr_dir dataset_triplet/train/HR \
+  --lr_dir dataset_triplet/train/LR \
+  --mask_dir dataset_triplet/train/masks \
+  --save_dir model \
+  --experiment_name diffusion_ddp_2gpu \
+  --save_best \
+  --save_every 5 \
+  --archive_every 20
+```
+
+### 训练参数说明
+
+| 参数 | 说明 |
+|------|------|
+| `--scale` | 超分倍率（4 表示 4 倍超分，1 表示同分辨率清晰化） |
+| `--hr_size` | 训练时 HR 图像的裁剪尺寸 |
+| `--batch_size` | 批大小（根据 GPU 内存调整） |
+| `--lr` | 学习率 |
+| `--lambda_seg` | 分割辅助损失的权重（0 表示禁用） |
+| `--save_dir` | 模型保存目录 |
+| `--experiment_name` | 实验名称，用于组织保存的模型文件 |
+
+## 🔍 推理指南
+
+### 使用训练好的模型进行推理
+
+```bash
+# 4 倍超分推理
+python inference_diffusion.py \
+  -i eval_inputs \
+  -o eval_outputs/diffusion_results \
+  --model_path model/diffusion_train_best.pth \
+  --outscale 4 \
+  --timesteps 180 \
+  --target_min_side 352
+```
+
+### 使用统一入口脚本
+
+```bash
+# 使用预设（推荐）
+python run_all.py enhance \
+  -i eval_inputs \
+  -o eval_outputs/enhanced \
+  --preset text-balanced
+
+# 自定义参数
+python run_all.py enhance \
+  -i eval_inputs \
+  -o eval_outputs/enhanced \
+  --steps 180 \
+  --min_side 352 \
+  --max_luma_delta 14.0 \
+  --edge_sharpen_strength 0.35
+```
+
+### 预设说明
+
+| 预设 | 适用场景 | 特点 |
+|------|----------|------|
+| `fast` | 速度优先 | 低时延，适合实时应用 |
+| `balanced` | 平衡模式 | 速度与质量的平衡（推荐） |
+| `best` | 质量优先 | 最高质量，速度较慢 |
+| `text-fast` | 文本快速增强 | 轻锐化 + 强保色，适合批量处理 |
+| `text-balanced` | 文本平衡模式 | 默认文本增强参数（推荐） |
+| `text-best` | 文本最佳质量 | 强锐化，极致文本细节 |
+
+## 📈 评估指南
+
+### 图像质量评估（PSNR/SSIM）
+
+```bash
+python tools/evaluate_text_models.py \
+  --input_dir eval_inputs \
+  --output_dir eval_outputs/comparison \
+  --methods bicubic,diffusion \
+  --outscale 4 \
+  --diffusion_model_path model/diffusion_train_best.pth \
+  --diffusion_outscale 4 \
+  --diffusion_steps 180 \
+  --diffusion_min_side 352
+```
+
+### OCR 准确率评估
+
+```bash
+python tools/evaluate_ocr_metrics.py \
+  --pred_dir eval_outputs/diffusion_results \
+  --gt_csv eval_inputs/labels.csv \
+  --image_col image \
+  --text_col text \
+  --suffix _diffusion \
+  --ocr_backend paddleocr \
+  --lang ch \
+  --device gpu \
+  --output_csv ocr_metrics_detail.csv \
+  --output_json ocr_metrics_summary.json
+```
+
+### 完整评估流程（一键式）
+
+```bash
+python run_all.py full-eval \
+  --input_dir eval_inputs \
+  --output_dir eval_outputs/full_evaluation \
+  --gt_dir eval_gt \
+  --gt_csv eval_inputs/labels.csv \
+  --methods bicubic,diffusion \
+  --lpips \
+  --report_html full_eval_report.html
+```
+
+## 🏗️ 高级功能
+
+### 模型注册表
+
+```bash
+# 列出可用模型
+python run_all.py model-registry --action list
+
+# 验证模型完整性
+python run_all.py model-registry --action verify --model text-priority
+
+# 下载模型
+python run_all.py model-registry --action download --model text-priority
+```
+
+### 预设管理
+
+```bash
+# 列出所有预设
+python run_all.py preset --action list
+
+# 创建自定义预设
+python run_all.py preset --action set \
+  --name my-text \
+  --values_json '{"steps":180,"min_side":352,"edge_sharpen_strength":0.4}'
+
+# 删除预设
+python run_all.py preset --action delete --name my-text
+```
+
+### 任务队列
+
+创建 `tasks.json`：
+```json
+{
+  "tasks": [
+    {
+      "name": "compare-fast",
+      "argv": ["compare", "--input_dir", "eval_inputs", "--output_dir", "eval_outputs/cmp_fast", "--preset", "text-fast"]
+    },
+    {
+      "name": "report-fast",
+      "argv": ["report", "--output_dir", "eval_outputs/cmp_fast", "--summary_json", "compare_summary.json"]
     }
+  ]
+}
+```
 
-## 📧 Contact
+执行任务队列：
+```bash
+python run_all.py queue \
+  --queue_json tasks.json \
+  --history_json queue_history.json \
+  --stop_on_error
+```
 
-If you have any question, please email `xintao.wang@outlook.com` or `xintaowang@tencent.com`.
+### GUI 界面
 
-<!---------------------------------- Projects that use Real-ESRGAN --------------------------->
-## 🧩 Projects that use Real-ESRGAN
+```bash
+python run_all.py gui
+```
 
-If you develop/use Real-ESRGAN in your projects, welcome to let me know.
+启动桌面 GUI，提供可视化操作界面。
 
-- NCNN-Android: [RealSR-NCNN-Android](https://github.com/tumuyan/RealSR-NCNN-Android) by [tumuyan](https://github.com/tumuyan)
-- VapourSynth: [vs-realesrgan](https://github.com/HolyWu/vs-realesrgan) by [HolyWu](https://github.com/HolyWu)
-- NCNN: [Real-ESRGAN-ncnn-vulkan](https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan)
+## 🖥️ 服务器训练指南
 
-&nbsp;&nbsp;&nbsp;&nbsp;**GUI**
+### 环境检查
 
-- [Waifu2x-Extension-GUI](https://github.com/AaronFeng753/Waifu2x-Extension-GUI) by [AaronFeng753](https://github.com/AaronFeng753)
-- [Squirrel-RIFE](https://github.com/Justin62628/Squirrel-RIFE) by [Justin62628](https://github.com/Justin62628)
-- [Real-GUI](https://github.com/scifx/Real-GUI) by [scifx](https://github.com/scifx)
-- [Real-ESRGAN_GUI](https://github.com/net2cn/Real-ESRGAN_GUI) by [net2cn](https://github.com/net2cn)
-- [Real-ESRGAN-EGUI](https://github.com/WGzeyu/Real-ESRGAN-EGUI) by [WGzeyu](https://github.com/WGzeyu)
-- [anime_upscaler](https://github.com/shangar21/anime_upscaler) by [shangar21](https://github.com/shangar21)
-- [Upscayl](https://github.com/upscayl/upscayl) by [Nayam Amarshe](https://github.com/NayamAmarshe) and [TGS963](https://github.com/TGS963)
+```bash
+# 检查 GPU 状态
+nvidia-smi
 
-## 🤗 Acknowledgement
+# 检查 PyTorch CUDA 支持
+python -c "import torch; print('CUDA available:', torch.cuda.is_available(), 'Device count:', torch.cuda.device_count())"
 
-Thanks for all the contributors.
+# 检查 PaddlePaddle GPU 支持
+python -c "import paddle; print('Paddle compiled with CUDA:', paddle.is_compiled_with_cuda())"
+```
 
-- [AK391](https://github.com/AK391): Integrate RealESRGAN to [Huggingface Spaces](https://huggingface.co/spaces) with [Gradio](https://github.com/gradio-app/gradio). See [Gradio Web Demo](https://huggingface.co/spaces/akhaliq/Real-ESRGAN).
-- [Asiimoviet](https://github.com/Asiimoviet): Translate the README.md to Chinese (中文).
-- [2ji3150](https://github.com/2ji3150): Thanks for the [detailed and valuable feedbacks/suggestions](https://github.com/xinntao/Real-ESRGAN/issues/131).
-- [Jared-02](https://github.com/Jared-02): Translate the Training.md to Chinese (中文).
+### 多卡训练示例（4 张 GPU）
+
+```bash
+# 设置使用的 GPU
+export CUDA_VISIBLE_DEVICES=0,1,2,3
+
+# 启动 DDP 训练
+torchrun --nproc_per_node=4 train_diffusion.py \
+  --ddp \
+  --dist_backend nccl \
+  --cond_mode concat \
+  --batch_size 32 \
+  --epochs 200 \
+  --scale 4 \
+  --hr_size 256 \
+  --train_size 256 \
+  --lr 1e-4 \
+  --lambda_seg 0.2 \
+  --num_workers 16 \
+  --hr_dir dataset_triplet/train/HR \
+  --lr_dir dataset_triplet/train/LR \
+  --mask_dir dataset_triplet/train/masks \
+  --save_dir model \
+  --experiment_name diffusion_ddp_4gpu \
+  --save_best \
+  --save_every 10 \
+  --archive_every 50
+```
+
+### 服务器推理与评估
+
+```bash
+# 使用特定 GPU 推理
+CUDA_VISIBLE_DEVICES=0 python inference_diffusion.py \
+  -i eval_inputs \
+  -o eval_outputs/server_results \
+  --model_path model/diffusion_ddp_4gpu_best.pth \
+  --outscale 4 \
+  --timesteps 200 \
+  --target_min_side 384
+
+# 服务器端完整评估
+CUDA_VISIBLE_DEVICES=0 python tools/evaluate_text_models.py \
+  --input_dir eval_inputs \
+  --output_dir eval_outputs/server_eval \
+  --methods bicubic,diffusion \
+  --outscale 4 \
+  --diffusion_model_path model/diffusion_ddp_4gpu_best.pth \
+  --diffusion_outscale 4 \
+  --diffusion_steps 200 \
+  --diffusion_min_side 384 \
+  --gt_dir eval_gt \
+  --metrics_csv server_metrics.csv
+```
+
+## ❓ 常见问题
+
+### Q1: CUDA 内存不足（OOM）
+
+**解决方法**：
+1. 减小批大小：`--batch_size 4 -> 2`
+2. 减小训练尺寸：`--train_size 256 -> 128`
+3. 减小推理尺寸：`--target_min_side 384 -> 256`
+4. 减少采样步数：`--timesteps 200 -> 120`
+
+### Q2: 训练效果不明显
+
+**建议**：
+1. 增加训练轮数：`--epochs 200 -> 400`
+2. 增加采样步数：`--timesteps 120 -> 200`
+3. 检查数据质量，确保 HR/LR 对应正确
+4. 尝试调整学习率：`--lr 1e-4 -> 5e-5`
+
+### Q3: 如何选择最佳模型
+
+**优先级**：
+1. 查看评估指标（如有 GT）：选择 PSNR/SSIM 最高的 checkpoint
+2. 人工视觉检查：重点关注文字边缘、断笔、可读性
+3. 保留 `*_best.pth` 和对应的训练命令以便复现
+
+### Q4: OCR 评估失败
+
+**检查步骤**：
+1. 确认安装了 PaddleOCR：`pip show paddleocr`
+2. 确认 PaddlePaddle GPU 版本与 CUDA 匹配
+3. 检查 PP-OCRv5 模型文件是否存在
+4. 确认 CSV 文件格式正确，包含 `image` 和 `text` 列
+
+## 📝 许可证
+
+本项目采用 MIT 许可证。详见 [LICENSE](LICENSE) 文件。
+
+## 🤝 贡献指南
+
+欢迎提交 Issue 和 Pull Request 来改进本项目。
+
+1. Fork 本仓库
+2. 创建功能分支：`git checkout -b feature/your-feature`
+3. 提交更改：`git commit -m 'Add some feature'`
+4. 推送到分支：`git push origin feature/your-feature`
+5. 提交 Pull Request
+
+## 🙏 致谢
+
+- 感谢 TextZoom 数据集提供方
+- 感谢 Real-ESRGAN 项目提供的退化方法
+- 感谢 PaddleOCR 团队提供的 OCR 工具
+
+---
+
+**如有问题，请查看 [Issues](https://github.com/your-username/dachuang-dachuang-text-enhancement/issues) 或提交新 Issue。**
