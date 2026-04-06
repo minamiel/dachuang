@@ -10,6 +10,331 @@
 
 ---
 
+## 快速开始
+
+为了降低参数复杂度，新增统一入口脚本：`run_all.py`。
+
+- `fast`：速度优先（低时延）
+- `balanced`：默认平衡（推荐）
+- `best`：质量优先（更慢）
+- `text-fast`：文本场景快速增强（轻锐化 + 强保色）
+- `text-balanced`：文本场景默认增强（推荐）
+- `text-best`：文本细节优先（更慢，锐化更强）
+
+文本专属后处理参数（可与 preset 叠加）：
+
+- `--edge_sharpen_strength`：边缘锐化强度
+- `--max_luma_delta`：亮度改变量限幅（luma clamp）
+- `--color_lock_strength`：色彩锁定强度（strict lock 下生效）
+
+### 文本 preset 可解释速度/质量曲线（默认推荐值 + 预期开销）
+
+| preset | 质量档位 | 速度档位 | 相对 `text-balanced` 预期开销 | steps | min_side | edge_sharpen | max_luma_delta | color_lock | 推荐场景 |
+|---|---|---|---|---:|---:|---:|---:|---:|---|
+| `text-fast` | 文本可读性优先（轻锐化） | 高吞吐 | 约 `0.7x ~ 0.8x` | 120 | 288 | 0.20 | 16.0 | 0.95 | 批量巡检、低时延 |
+| `text-balanced` | 默认推荐（质量/速度平衡） | 中等 | `1.0x`（基线） | 180 | 352 | 0.35 | 14.0 | 0.98 | 通用上线默认档 |
+| `text-best` | 文本细节极致（强锐化） | 较慢 | 约 `1.3x ~ 1.5x` | 260 | 384 | 0.45 | 12.0 | 1.00 | 关键样本离线复核 |
+
+不可逆迁移建议：
+
+1. 以 `text-balanced` 作为统一默认基线，冻结团队默认参数口径；
+2. 高并发任务仅允许切到 `text-fast`，并在报告里记录 profile 与预期开销；
+3. `text-best` 仅用于质量兜底与归档，不回写为常规默认值。
+
+### 1) 单图/目录增强（Diffusion）
+
+```powershell
+python .\run_all.py enhance `
+	-i .\eval_inputs `
+	-o .\eval_outputs\enhance_balanced `
+	--preset balanced
+```
+
+文本场景建议：
+
+```powershell
+python .\run_all.py enhance `
+	-i .\eval_inputs `
+	-o .\eval_outputs\enhance_text `
+	--preset text-balanced
+```
+
+### 2) 批量评测与对比图（Bicubic + Diffusion）
+
+```powershell
+python .\run_all.py compare `
+	--input_dir .\eval_inputs `
+	--output_dir .\eval_outputs\cmp_balanced `
+	--preset balanced
+```
+
+### 3) 统一批处理（可选方法）
+
+```powershell
+python .\run_all.py batch `
+	--input_dir .\eval_inputs `
+	--output_dir .\eval_outputs\batch_fast `
+	--methods bicubic,diffusion `
+	--preset fast
+```
+
+### 4) OCR 指标评测
+
+```powershell
+python .\run_all.py ocr-eval `
+	--pred_dir .\eval_outputs\enhance_balanced `
+	--gt_csv .\eval_inputs\labels.csv `
+	--suffix _diffusion `
+	--ocr_backend paddleocr `
+	--lang ch
+```
+
+### 5) 仅打印即将执行命令（排查参数用）
+
+```powershell
+python .\run_all.py compare --dry_run
+```
+
+### 6) 稳定性护栏（推荐批量任务开启）
+
+- `--resume`：跳过已完成输出，支持断点续跑
+- `--fail_fast`：首个失败立即停止（默认关闭，失败不中断）
+- `--failure_csv`：失败清单导出路径
+- `--summary_json`：本次运行摘要（成功/失败/耗时）
+
+示例：
+
+```powershell
+python .\run_all.py batch `
+	--input_dir .\eval_inputs `
+	--output_dir .\eval_outputs\batch_balanced `
+	--preset balanced `
+	--resume `
+	--failure_csv batch_failures.csv `
+	--summary_json batch_summary.json
+```
+
+### 7) 一键生成 HTML 报告（画廊 + 摘要 + 失败样本）
+
+```powershell
+python .\run_all.py report `
+	--output_dir .\eval_outputs\batch_balanced `
+	--summary_json batch_summary.json `
+	--report_html report.html `
+	--title "Diffusion Batch Report"
+```
+
+### 8) 批任务完成后自动生成报告（闭环）
+
+```powershell
+python .\run_all.py compare `
+	--input_dir .\eval_inputs `
+	--output_dir .\eval_outputs\cmp_balanced `
+	--preset balanced `
+	--auto_report `
+	--auto_report_html auto_report.html `
+	--auto_report_title "Compare Auto Report" `
+	--auto_report_max_rows 120
+```
+
+说明：
+
+- `--auto_report`：主任务成功后自动触发 `report`
+- `--auto_report_html`：自动报告输出文件名/路径
+- `--auto_report_title`：自动报告标题
+- `--auto_report_max_rows`：报告中表格与画廊最大展示条数
+
+### 9) 开启 LPIPS 感知指标（需 GT）
+
+```powershell
+python .\run_all.py batch `
+	--input_dir .\eval_inputs `
+	--output_dir .\eval_outputs\batch_lpips `
+	--gt_dir .\eval_gt `
+	--methods bicubic,diffusion `
+	--lpips `
+	--lpips_net alex `
+	--auto_report
+```
+
+说明：
+
+- `SSIM` 已升级为标准窗口化实现
+
+### 13) 小样本端到端 smoke 回归（输入 -> 输出 -> 指标）
+
+已新增 `tests/test_e2e_smoke_eval.py`，覆盖最小样本从评测脚本产出到 `summary/metrics` 的完整链路，用于避免版本“玄学退化”。
+
+### 14) 性能优化：warmup + 吞吐统计
+
+`enhance` / `batch` / `full-eval` 默认会执行一次轻量 warmup（可关闭），并在 summary 输出吞吐指标：
+
+- `throughput_img_per_sec`
+- `warmup_sec`（或 `diffusion_warmup_sec`）
+
+同时支持大图分块与接缝优化参数：
+
+- `--tile_size`：分块大小（0 为关闭）
+- `--tile_overlap`：分块重叠像素
+- `--no_tile_blend`：关闭重叠融合（默认开启融合，接缝更平滑）
+
+关闭 warmup：
+
+```powershell
+python .\run_all.py batch `
+	--input_dir .\eval_inputs `
+	--output_dir .\eval_outputs\cmp_local `
+	--methods bicubic,diffusion `
+	--preset text-balanced `
+	--tile_size 384 `
+	--tile_overlap 48 `
+	--no_warmup
+```
+
+### 15) 任务队列 + 历史记录
+
+新增 `queue` 子命令，可批量执行 `run_all` 任务并输出执行历史。
+
+`tasks.json` 示例：
+
+```json
+{
+	"tasks": [
+		{
+			"name": "compare-fast",
+			"argv": ["compare", "--input_dir", "eval_inputs", "--output_dir", "eval_outputs/cmp_fast", "--preset", "text-fast"]
+		},
+		{
+			"name": "report-fast",
+			"argv": ["report", "--output_dir", "eval_outputs/cmp_fast", "--summary_json", "compare_summary.json"]
+		}
+	]
+}
+```
+
+执行：
+
+```powershell
+python .\run_all.py queue `
+	--queue_json .\tasks.json `
+	--history_json .\queue_history.json `
+	--stop_on_error
+```
+
+### 16) 模型仓 + 校验 + profile 切换
+
+新增 `model-registry` 子命令（list / verify / download）：
+
+```powershell
+python .\run_all.py model-registry --action list
+python .\run_all.py model-registry --action verify --model text-priority
+```
+
+新增模型 profile：
+
+- `--model_profile text-priority`（默认）
+- `--model_profile natural-priority`
+
+也可直接 `--model_path` 覆盖 profile 默认路径。
+
+### 17) 轻量桌面 GUI + 预设管理
+
+启动桌面 GUI（本地，无额外服务依赖）：
+
+```powershell
+python .\run_all.py gui
+```
+
+GUI 能力：
+
+- 单任务运行（enhance/compare/batch/full-eval）
+- 加入任务队列并执行
+- 查看历史输出
+- 一键查看/切换模型 profile
+
+预设管理（自定义 preset）：
+
+```powershell
+python .\run_all.py preset --action list
+python .\run_all.py preset --action set --name my-text --values_json "{\"steps\":180,\"min_side\":352,\"edge_sharpen_strength\":0.4}"
+python .\run_all.py preset --action delete --name my-text
+```
+
+### 18) P2 验收指标映射
+
+| 验收指标 | 当前落地机制 | 建议验证方式 |
+|---|---|---|
+| 首次安装到出第一张图 ≤ 10 分钟（Windows） | `run_all.py gui` + 默认 `text-balanced` + warmup/summary | 新环境计时：安装依赖→GUI/CLI 跑首图，记录 wall time |
+| 默认模式批量100张失败率 < 1% | `resume/fail_fast/failure_csv/summary_json` + `queue_history` 可恢复 | 固定数据集跑 100 张，按 `failed/total_images` 计算 |
+| 默认模式相对 bicubic：OCR CER 平均下降 ≥ 15% | `full-eval` 统一产出图像/OCR报告 | 比较 `bicubic` vs `diffusion` 的 OCR CER 均值 |
+| 用户不改参数直接可用率 > 90% | `active model profile` + 默认 preset + GUI 快速入口 | 记录“默认参数直接成功完成”的任务占比 |
+| 报错可读可恢复率 > 95% | `failure_csv`、`error_type_counts`、`queue history`、可重试队列 | 统计失败任务中可定位并二次恢复成功比例 |
+
+备注：模型仓已支持 profile 版本管理、校验与激活（`list/status/verify/download/activate`），并通过 `--model_profile active` 默认读取当前激活模型。
+- `LPIPS` 为可选指标（`alex/vgg/squeeze`）
+- 报告页会新增“方法排行榜（质量 + 速度）”，综合展示 `PSNR/SSIM/LPIPS/avg_sec`
+
+### 10) 一键全流程评测（图像指标 + OCR 指标 + 报告）
+
+```powershell
+python .\run_all.py full-eval `
+	--input_dir .\eval_inputs `
+	--output_dir .\eval_outputs\full_eval `
+	--gt_dir .\eval_gt `
+	--gt_csv .\eval_inputs\labels.csv `
+	--pred_dir .\eval_outputs\full_eval\diffusion `
+	--methods bicubic,diffusion `
+	--lpips `
+	--report_html full_eval_report.html
+```
+
+说明：
+
+- `full-eval` 会按顺序执行：图像评测 -> OCR 评测 -> HTML 报告
+- 报告将自动整合 OCR summary/detail（若文件存在）
+- 方法排行榜支持权重可配：
+	- `--score_weight_ssim`
+	- `--score_weight_lpips`
+	- `--score_weight_psnr`
+	- `--score_weight_speed`
+
+	### 11) 与上一轮报告做基线对比
+
+	```powershell
+	python .\run_all.py report `
+		--output_dir .\eval_outputs\full_eval `
+		--summary_json full_eval_summary.json `
+		--report_json current_report_summary.json `
+		--baseline_report_json baseline_report_summary.json
+	```
+
+	说明：
+
+	- `--report_json`：当前轮报告结构化结果（可作为下次 baseline）
+	- `--baseline_report_json`：上一轮 `report_json`，用于输出各方法涨跌（Δscore/ΔPSNR/ΔSSIM/ΔLPIPS/Δavg_sec）
+	- 默认会把报告分析结果回写到 `summary_json` 的 `report_analysis` 字段
+	- 若不希望回写，可加 `--no_writeback_summary`
+
+	### 12) 多轮趋势与稳定性统计
+
+	```powershell
+	python .\run_all.py report `
+		--output_dir .\eval_outputs\full_eval `
+		--summary_json full_eval_summary.json `
+		--report_json current_report_summary.json `
+		--history_json report_history.json
+	```
+
+	说明：
+
+	- 报告新增 **OCR 分布统计**（CER/WER 的 mean/p50/p90 + CER 分桶计数）
+	- 报告新增 **多轮趋势区块**（最近 20 轮）：best score / OCR accuracy / elapsed sec
+	- 报告新增 **方法级趋势区块**（最近 20 轮）：各方法 score 与 avg sec 曲线
+	- `--history_json` 用于累计历史记录（默认 `report_history.json`）
+	- 若本次不想写入历史，可加 `--no_append_history`
+
+---
+
 ## 任务目标定义
 
 本项目是**基于扩散模型的文本图像超分辨率（Text Image Super-Resolution）**，目标不是只处理文字区域，而是：

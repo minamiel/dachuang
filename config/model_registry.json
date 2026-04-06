@@ -1,0 +1,40 @@
+{
+  "profiles": {
+    "text-priority": {
+      "model": "diffusion-text",
+      "default_version": "v1",
+      "description": "Text-focused default profile"
+    },
+    "natural-priority": {
+      "model": "diffusion-natural",
+      "default_version": "v1",
+      "description": "Natural-image preference profile"
+    }
+  },
+  "models": {
+    "diffusion-text": {
+      "description": "Diffusion model tuned for OCR readability",
+      "versions": {
+        "v1": {
+          "filename": "diffusion_textzoom_bs8_latest.pth",
+          "path": "model/diffusion_textzoom_bs8_latest.pth",
+          "sha256": "",
+          "url": "",
+          "notes": "Project default baseline"
+        }
+      }
+    },
+    "diffusion-natural": {
+      "description": "Diffusion model tuned for natural image quality",
+      "versions": {
+        "v1": {
+          "filename": "diffusion_natural_latest.pth",
+          "path": "model/diffusion_natural_latest.pth",
+          "sha256": "",
+          "url": "",
+          "notes": "Placeholder entry, update url/hash before production use"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Text Enhancement Evaluation Report</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 24px; color: #1f2937; }
+    h1, h2, h3 { margin: 0 0 12px; }
+    .muted { color: #6b7280; margin-bottom: 16px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 12px; }
+    .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px; background: #fff; }
+    .card img { width: 100%; border-radius: 6px; background: #f3f4f6; }
+    .caption { font-size: 12px; color: #4b5563; margin-bottom: 6px; word-break: break-all; }
+    .thumb { width: 180px; max-width: 100%; border-radius: 6px; display: block; background: #f3f4f6; }
+    .trend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; margin: 10px 0 16px; }
+    table { border-collapse: collapse; width: 100%; margin: 10px 0 18px; }
+    th, td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; font-size: 13px; vertical-align: top; }
+    th { background: #f9fafb; }
+  </style>
+</head>
+<body>
+  <h1>Text Enhancement Evaluation Report</h1>
+  <div class="muted">summary source: (not found)</div>
+
+  <h2>运行摘要</h2>
+  <p>未找到 summary.json，以下仅展示对比图与失败样本（若存在）。</p>
+
+    <h2>方法排行榜（质量 + 速度）</h2>
+    <div class="muted">score weights: ssim=0.450, lpips=0.250, psnr=0.200, speed=0.100</div>
+    <p>无可用排行榜数据（缺少 metrics.csv 或 method_stats）。</p>
+
+        <h2>与基线报告对比（涨跌）</h2>
+        <div class="muted">baseline source: (not found)</div>
+        <p>无 baseline 对比数据。</p>
+
+    <h2>OCR 指标摘要</h2>
+    <div class="muted">ocr summary source: (not found)</div>
+    <p>无 OCR summary 数据。</p>
+
+    <h2>OCR 错误样本（按 CER 降序，最多 120 条）</h2>
+    <div class="muted">ocr detail source: (not found)</div>
+    <p>无 OCR 细节数据。</p>
+
+        <h2>OCR 分布统计（稳定性）</h2>
+        <p>无 OCR 分布统计。</p>
+
+        <h2>多轮历史趋势（最近20轮）</h2>
+        <p>暂无历史记录。</p>
+
+    <h2>方法级历史趋势（最近20轮）</h2>
+    <p>暂无可用方法级趋势数据（可通过新版本 history 累积后自动显示）。</p>
+
+    <h2>文本 preset 速度/质量曲线（可解释）</h2>
+    <table><thead><tr><th>preset</th><th>quality tier</th><th>speed tier</th><th>expected cost</th><th>steps</th><th>min_side</th><th>edge_sharpen</th><th>max_luma_delta</th><th>color_lock</th><th>notes</th><th>tag</th></tr></thead><tbody><tr><td>text-fast</td><td>文本可读性优先（轻锐化）</td><td>高吞吐</td><td>约 0.7x ~ 0.8x</td><td>120</td><td>288</td><td>0.2</td><td>16.0</td><td>0.95</td><td>推荐批量巡检、实时预览与低时延场景。</td><td>⭐ 推荐</td></tr><tr><td>text-balanced</td><td>默认推荐（质量/速度平衡）</td><td>中等</td><td>1.0x（基线）</td><td>180</td><td>352</td><td>0.35</td><td>14.0</td><td>0.98</td><td>推荐默认上线档，适合多数店招/票据/截图文本增强。</td><td>⭐ 推荐</td></tr><tr><td>text-best</td><td>文本细节极致（强锐化）</td><td>较慢</td><td>约 1.3x ~ 1.5x</td><td>260</td><td>384</td><td>0.45</td><td>12.0</td><td>1.0</td><td>推荐离线高质量重建或关键样本复核。</td><td></td></tr></tbody></table><p>当前运行未提供 diffusion 配置快照。</p><div class='card'><h3>不可逆迁移建议</h3><ul><li>默认上线使用 <code>text-balanced</code>，作为组织内统一基线，避免后续口径漂移。</li><li>高并发场景降级到 <code>text-fast</code>，并在报告中保留 expected cost 记录。</li><li>关键样本复核使用 <code>text-best</code>，其结果可作为质量兜底版本归档。</li></ul></div>
+
+  <h2>失败样本（最多 120 条）</h2>
+  <p>无失败记录。</p>
+
+    <h2>方法输出缩略图（最多 120 条）</h2>
+    <table><thead><tr><th>image</th><th>bicubic</th><th>realesrgan</th><th>diffusion</th><th>comparison</th></tr></thead><tbody><tr><td>eval_001</td><td><img class='thumb' src='bicubic/eval_001.png' loading='lazy' /></td><td>-</td><td><img class='thumb' src='diffusion/eval_001.png' loading='lazy' /></td><td><img class='thumb' src='comparisons/eval_001_compare.png' loading='lazy' /></td></tr><tr><td>eval_002</td><td><img class='thumb' src='bicubic/eval_002.png' loading='lazy' /></td><td>-</td><td><img class='thumb' src='diffusion/eval_002.png' loading='lazy' /></td><td><img class='thumb' src='comparisons/eval_002_compare.png' loading='lazy' /></td></tr><tr><td>eval_003</td><td><img class='thumb' src='bicubic/eval_003.png' loading='lazy' /></td><td>-</td><td><img class='thumb' src='diffusion/eval_003.png' loading='lazy' /></td><td><img class='thumb' src='comparisons/eval_003_compare.png' loading='lazy' /></td></tr><tr><td>eval_004</td><td><img class='thumb' src='bicubic/eval_004.png' loading='lazy' /></td><td>-</td><td><img class='thumb' src='diffusion/eval_004.png' loading='lazy' /></td><td><img class='thumb' src='comparisons/eval_004_compare.png' loading='lazy' /></td></tr><tr><td>eval_005</td><td><img class='thumb' src='bicubic/eval_005.png' loading='lazy' /></td><td>-</td><td><img class='thumb' src='diffusion/eval_005.png' loading='lazy' /></td><td><img class='thumb' src='comparisons/eval_005_compare.png' loading='lazy' /></td></tr></tbody></table>
+
+  <h2>对比图画廊（最多 120 张）</h2>
+  <div class="grid"><div class='card'><div class='caption'>eval_001_compare.png</div><img src='comparisons/eval_001_compare.png' loading='lazy' /></div><div class='card'><div class='caption'>eval_002_compare.png</div><img src='comparisons/eval_002_compare.png' loading='lazy' /></div><div class='card'><div class='caption'>eval_003_compare.png</div><img src='comparisons/eval_003_compare.png' loading='lazy' /></div><div class='card'><div class='caption'>eval_004_compare.png</div><img src='comparisons/eval_004_compare.png' loading='lazy' /></div><div class='card'><div class='caption'>eval_005_compare.png</div><img src='comparisons/eval_005_compare.png' loading='lazy' /></div></div>
+</body>
+</html>
