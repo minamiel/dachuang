@@ -1,0 +1,958 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TextSR 实验看板</title>
+  <style>
+    :root {
+      --bg: #f6f1e8;
+      --panel: rgba(255,255,255,0.88);
+      --ink: #1d2330;
+      --muted: #5f6877;
+      --line: rgba(29,35,48,0.12);
+      --accent: #b14d24;
+      --accent-soft: #f0d6c9;
+      --shadow: 0 20px 50px rgba(40, 29, 13, 0.08);
+      --radius: 24px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(177,77,36,0.18), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(52,112,92,0.12), transparent 24%),
+        linear-gradient(180deg, #faf6ef, var(--bg));
+    }
+    .wrap {
+      width: min(1220px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 48px;
+    }
+    .masthead {
+      display: grid;
+      gap: 18px;
+      margin-bottom: 24px;
+    }
+    .title {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      border-radius: 30px;
+      padding: 28px;
+    }
+    .title h1 {
+      margin: 0 0 10px;
+      font-size: clamp(30px, 4vw, 56px);
+      line-height: 1.02;
+      letter-spacing: -0.03em;
+    }
+    .title p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 16px;
+    }
+    .hero-card {
+      background: linear-gradient(135deg, #fff6ef, #fffdf9);
+      border: 1px solid rgba(177,77,36,0.18);
+      box-shadow: var(--shadow);
+      border-radius: var(--radius);
+      padding: 22px;
+    }
+    .eyebrow {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--accent);
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+    .hero-card h2 {
+      margin: 0 0 14px;
+      font-size: 28px;
+    }
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+    }
+    .metric-grid div, .mini-grid div {
+      background: rgba(255,255,255,0.84);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 12px 14px;
+    }
+    .metric-grid span, .mini-grid span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+    .metric-grid strong, .mini-grid strong {
+      font-size: 20px;
+    }
+    .section {
+      margin-top: 28px;
+    }
+    .section h2 {
+      margin: 0 0 14px;
+      font-size: 24px;
+    }
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 18px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: start;
+      margin-bottom: 12px;
+    }
+    .card h3 {
+      margin: 0;
+      font-size: 22px;
+    }
+    .path {
+      color: var(--muted);
+      font-size: 12px;
+      max-width: 160px;
+      text-align: right;
+      word-break: break-word;
+    }
+    .preview {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: #eee7dc;
+      margin-bottom: 12px;
+    }
+    .mini-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 40px;
+      padding: 0 14px;
+      border-radius: 999px;
+      text-decoration: none;
+      color: white;
+      background: var(--accent);
+      font-weight: 600;
+    }
+    .btn.secondary {
+      color: var(--ink);
+      background: var(--accent-soft);
+    }
+    .table-wrap {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      white-space: nowrap;
+    }
+    th {
+      background: rgba(177,77,36,0.08);
+      font-size: 13px;
+    }
+    td {
+      font-size: 14px;
+    }
+    @media (max-width: 720px) {
+      .wrap { width: min(100% - 20px, 1220px); }
+      .title { padding: 22px; }
+      .card { padding: 16px; }
+      .mini-grid { grid-template-columns: 1fr 1fr; }
+      .card-top { flex-direction: column; }
+      .path { text-align: left; max-width: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="masthead">
+      <section class="title">
+        <div class="eyebrow">可视化平台</div>
+        <h1>TextSR 实验看板</h1>
+        <p>这个页面会扫描 <code>eval_outputs</code> 和 <code>model</code>，汇总你们当前所有实验结果。后面继续换模型、补数据、升级评测，这个页面都还能复用。</p>
+      </section>
+      
+        <section class="hero-card">
+          <div class="eyebrow">当前最佳真实 OCR 结果</div>
+          <h2>real_ocr_eval_v2_text_prior_v2</h2>
+          <div class="metric-grid">
+            <div><span>准确率</span><strong>0.6250</strong></div>
+            <div><span>CER</span><strong>0.0932</strong></div>
+            <div><span>WER</span><strong>0.4615</strong></div>
+            <div><span>样本数</span><strong>24</strong></div>
+          </div>
+        </section>
+        
+    </div>
+
+    <section class="section">
+      <h2>实验结果卡片</h2>
+      <div class="card-grid">
+        
+            <article class="card">
+              <div class="card-top">
+                <div>
+                  <div class="eyebrow">实验</div>
+                  <h3>baseline_280_realcheck</h3>
+                </div>
+                <div class="path">eval_outputs/baseline_280_realcheck</div>
+              </div>
+              
+              <div class="mini-grid">
+                <div><span>OCR 准确率</span><strong>-</strong></div>
+                <div><span>CER</span><strong>-</strong></div>
+                <div><span>WER</span><strong>-</strong></div>
+                <div><span>样本数</span><strong>-</strong></div>
+                <div><span>总耗时</span><strong>1.8013</strong></div>
+                <div><span>扩散平均耗时</span><strong>-</strong></div>
+              </div>
+              <div class="actions"><a class="btn secondary" href="../eval_outputs/baseline_280_realcheck" target="_blank">打开目录</a></div>
+            </article>
+            
+            <article class="card">
+              <div class="card-top">
+                <div>
+                  <div class="eyebrow">实验</div>
+                  <h3>baseline_280_traincheck</h3>
+                </div>
+                <div class="path">eval_outputs/baseline_280_traincheck</div>
+              </div>
+              
+              <div class="mini-grid">
+                <div><span>OCR 准确率</span><strong>-</strong></div>
+                <div><span>CER</span><strong>-</strong></div>
+                <div><span>WER</span><strong>-</strong></div>
+                <div><span>样本数</span><strong>-</strong></div>
+                <div><span>总耗时</span><strong>6.0255</strong></div>
+                <div><span>扩散平均耗时</span><strong>-</strong></div>
+              </div>
+              <div class="actions"><a class="btn secondary" href="../eval_outputs/baseline_280_traincheck" target="_blank">打开目录</a></div>
+            </article>
+            
+            <article class="card">
+              <div class="card-top">
+                <div>
+                  <div class="eyebrow">实验</div>
+                  <h3>baseline_struct_v1_visual</h3>
+                </div>
+                <div class="path">eval_outputs/baseline_struct_v1_visual</div>
+              </div>
+              
+              <div class="mini-grid">
+                <div><span>OCR 准确率</span><strong>-</strong></div>
+                <div><span>CER</span><strong>-</strong></div>
+                <div><span>WER</span><strong>-</strong></div>
+                <div><span>样本数</span><strong>-</strong></div>
+                <div><span>总耗时</span><strong>84.5985</strong></div>
+                <div><span>扩散平均耗时</span><strong>-</strong></div>
+              </div>
+              <div class="actions"><a class="btn secondary" href="../eval_outputs/baseline_struct_v1_visual" target="_blank">打开目录</a></div>
+            </article>
+            
+            <article class="card">
+              <div class="card-top">
+                <div>
+                  <div class="eyebrow">实验</div>
+                  <h3>check_baseline</h3>
+                </div>
+                <div class="path">eval_outputs/check_baseline</div>
+              </div>
+              
+              <div class="mini-grid">
+                <div><span>OCR 准确率</span><strong>-</strong></div>
+                <div><span>CER</span><strong>-</strong></div>
+                <div><span>WER</span><strong>-</strong></div>
+                <div><span>样本数</span><strong>-</strong></div>
+                <div><span>总耗时</span><strong>1.8741</strong></div>
+                <div><span>扩散平均耗时</span><strong>-</strong></div>
+              </div>
+              <div class="actions"><a class="btn secondary" href="../eval_outputs/check_baseline" target="_blank">打开目录</a></div>
+            </article>
+            
+            <article class="card">
+              <div class="card-top">
+                <div>
+                  <div class="eyebrow">实验</div>
+                  <h3>check_mask_v1</h3>
+                </div>
+                <div class="path">eval_outputs/check_mask_v1</div>
+              </div>
+              
+              <div class="mini-grid">
+                <div><span>OCR 准确率</span><strong>-</strong></div>
+                <div><span>CER</span><strong>-</strong></div>
+                <div><span>WER</span><strong>-</strong></div>
+                <div><span>样本数</span><strong>-</strong></div>
+                <div><span>总耗时</span><strong>1.9151</strong></div>
+                <div><span>扩散平均耗时</span><strong>-</strong></div>
+              </div>
+              <div class="actions"><a class="btn secondary" href="../eval_outputs/check_mask_v1" target="_blank">打开目录</a></div>
+            </article>
+            
+            <article class="card">
+              <div class="card-top">
+                <div>
+                  <div class="eyebrow">实验</div>
+                  <h3>check_mask_v2</h3>
+                </div>
+                <div class="path">eval_outputs/check_mask_v2</div>
+              </div>
+              
+              <div class="mini-grid">
+                <div><span>OCR 准确率</span><strong>-</strong></div>
+                <div><span>CER</span><strong>-</strong></div>
+                <div><span>WER</span><strong>-</strong></div>
+                <div><span>样本数</span><strong>-</strong></div>
+                <div><span>总耗时</span><strong>1.9032</strong></div>
+                <div><span>扩散平均耗时</span><strong>-</strong></div>
+              </div>
+              <div class="actions"><a class="btn secondary" href="../eval_outputs/check_mask_v2" target="_blank">打开目录</a></div>
+            </article>
+            
+            <article class="card">
+              <div class="card-top">
+                <div>
+                  <div class="eyebrow">实验</div>
+                  <h3>cmp_local</h3>
+                </div>
+                <div class="path">eval_outputs/cmp_local</div>
+              </div>
+              <img class="preview" src="../eval_outputs/cmp_local/comparisons/eval_001_compare.png" alt="cmp_local preview" />
+              <div class="mini-grid">
+                <div><span>OCR 准确率</span><strong>-</strong></div>
+                <div><span>CER</span><strong>-</strong></div>
+                <div><span>WER</span><strong>-</strong></div>
+                <div><span>样本数</span><strong>-</strong></div>
+                <div><span>总耗时</span><strong>-</strong></div>
+                <div><span>扩散平均耗时</span><strong>-</strong></div>
+              </div>
+              <div class="actions"><a class="btn" href="../eval_outputs/cmp_local/report_curve_table_preview.html" target="_blank">打开报告</a><a class="btn secondary" href="../eval_outputs/cmp_local" target="_blank">打开目录</a></div>
+            </article>
+            
+            <article class="card">
+              <div class="card-top">
+                <div>
+                  <div class="eyebrow">实验</div>
+                  <h3>cmp_x1</h3>
+                </div>
+                <div class="path">eval_outputs/cmp_x1</div>
+              </div>
+              <img class="preview" src="../eval_outputs/cmp_x1/comparisons/eval_001_compare.png" alt="cmp_x1 preview" />
+              <div class="mini-grid">
+                <div><span>OCR 准确率</span><strong>-</strong></div>
+                <div><span>CER</span><strong>-</strong></div>
+                <div><span>WER</span><strong>-</strong></div>
+                <div><span>样本数</span><strong>-</strong></div>
+                <div><span>总耗时</span><strong>-</strong></div>
+                <div><span>扩散平均耗时</span><strong>-</strong></div>
+              </div>
+              <div class="actions"><a class="btn secondary" href="../eval_outputs/cmp_x1" target="_blank">打开目录</a></div>
+            </article>
+            
+            <article class="card">
+              <div class="card-top">
+                <div>
+                  <div class="eyebrow">实验</div>
+                  <h3>debug_baseline_001</h3>
+                </div>
+                <div class="path">eval_outputs/debug_baseline_001</div>
+              </div>
+              
+              <div class="mini-grid">
+                <div><span>OCR 准确率</span><strong>-</strong></div>
+                <div><span>CER</span><strong>-</strong></div>
+                <div><span>WER</span><strong>-</strong></div>
+                <div><span>样本数</span><strong>-</strong></div>
+                <div><span>总耗时</span><strong>12.2517</strong></div>
+                <div><span>扩散平均耗时</span><strong>-</strong></div>
+              </div>
+              <div class="actions"><a class="btn secondary" href="../eval_outputs/debug_baseline_001" target="_blank">打开目录</a></div>
+            </article>
+            
+            <article class="card">
+              <div class="card-top">
+                <div>
+                  <div class="eyebrow">实验</div>
+                  <h3>debug_real_v2</h3>
+                </div>
+                <div class="path">eval_outputs/debug_real_v2</div>
+              </div>
+              
+              <div class="mini-grid">
+                <div><span>OCR 准确率</span><strong>-</strong></div>
+                <div><span>CER</span><strong>-</strong></div>
+                <div><span>WER</span><strong>-</strong></div>
+                <div><span>样本数</span><strong>-</strong></div>
+                <div><span>总耗时</span><strong>2.5987</strong></div>
+                <div><span>扩散平均耗时</span><strong>-</strong></div>
+              </div>
+              <div class="actions"><a class="btn secondary" href="../eval_outputs/debug_real_v2" target="_blank">打开目录</a></div>
+            </article>
+            
+            <article class="card">
+              <div class="card-top">
+                <div>
+                  <div class="eyebrow">实验</div>
+                  <h3>debug_train_domain</h3>
+                </div>
+                <div class="path">eval_outputs/debug_train_domain</div>
+              </div>
+              
+              <div class="mini-grid">
+                <div><span>OCR 准确率</span><strong>-</strong></div>
+                <div><span>CER</span><strong>-</strong></div>
+                <div><span>WER</span><strong>-</strong></div>
+                <div><span>样本数</span><strong>-</strong></div>
+                <div><span>总耗时</span><strong>63.5817</strong></div>
+                <div><span>扩散平均耗时</span><strong>-</strong></div>
+              </div>
+              <div class="actions"><a class="btn secondary" href="../eval_outputs/debug_train_domain" target="_blank">打开目录</a></div>
+            </article>
+            
+            <article class="card">
+              <div class="card-top">
+                <div>
+                  <div class="eyebrow">实验</div>
+                  <h3>debug_train_domain_v2</h3>
+                </div>
+                <div class="path">eval_outputs/debug_train_domain_v2</div>
+              </div>
+              
+              <div class="mini-grid">
+                <div><span>OCR 准确率</span><strong>-</strong></div>
+                <div><span>CER</span><strong>-</strong></div>
+                <div><span>WER</span><strong>-</strong></div>
+                <div><span>样本数</span><strong>-</strong></div>
+                <div><span>总耗时</span><strong>7.8350</strong></div>
+                <div><span>扩散平均耗时</span><strong>-</strong></div>
+              </div>
+              <div class="actions"><a class="btn secondary" href="../eval_outputs/debug_train_domain_v2" target="_blank">打开目录</a></div>
+            </article>
+            
+            <article class="card">
+              <div class="card-top">
+                <div>
+                  <div class="eyebrow">实验</div>
+                  <h3>real_ocr_eval</h3>
+                </div>
+                <div class="path">eval_outputs/real_ocr_eval</div>
+              </div>
+              <img class="preview" src="../eval_outputs/real_ocr_eval/comparisons/eval_001_compare.png" alt="real_ocr_eval preview" />
+              <div class="mini-grid">
+                <div><span>OCR 准确率</span><strong>0.6000</strong></div>
+                <div><span>CER</span><strong>0.3234</strong></div>
+                <div><span>WER</span><strong>1.5500</strong></div>
+                <div><span>样本数</span><strong>5</strong></div>
+                <div><span>总耗时</span><strong>83.1046</strong></div>
+                <div><span>扩散平均耗时</span><strong>15.7865</strong></div>
+              </div>
+              <div class="actions"><a class="btn" href="../eval_outputs/real_ocr_eval/real_ocr_report.html" target="_blank">打开报告</a><a class="btn secondary" href="../eval_outputs/real_ocr_eval" target="_blank">打开目录</a></div>
+            </article>
+            
+            <article class="card">
+              <div class="card-top">
+                <div>
+                  <div class="eyebrow">实验</div>
+                  <h3>real_ocr_eval_baseline_recog_v1</h3>
+                </div>
+                <div class="path">eval_outputs/real_ocr_eval_baseline_recog_v1</div>
+              </div>
+              <img class="preview" src="../eval_outputs/real_ocr_eval_baseline_recog_v1/comparisons/eval_001_compare.png" alt="real_ocr_eval_baseline_recog_v1 preview" />
+              <div class="mini-grid">
+                <div><span>OCR 准确率</span><strong>0.6000</strong></div>
+                <div><span>CER</span><strong>0.3234</strong></div>
+                <div><span>WER</span><strong>1.5500</strong></div>
+                <div><span>样本数</span><strong>5</strong></div>
+                <div><span>总耗时</span><strong>82.9776</strong></div>
+                <div><span>扩散平均耗时</span><strong>15.9394</strong></div>
+              </div>
+              <div class="actions"><a class="btn" href="../eval_outputs/real_ocr_eval_baseline_recog_v1/real_ocr_report.html" target="_blank">打开报告</a><a class="btn secondary" href="../eval_outputs/real_ocr_eval_baseline_recog_v1" target="_blank">打开目录</a></div>
+            </article>
+            
+            <article class="card">
+              <div class="card-top">
+                <div>
+                  <div class="eyebrow">实验</div>
+                  <h3>real_ocr_eval_baseline_struct_v1</h3>
+                </div>
+                <div class="path">eval_outputs/real_ocr_eval_baseline_struct_v1</div>
+              </div>
+              <img class="preview" src="../eval_outputs/real_ocr_eval_baseline_struct_v1/comparisons/eval_001_compare.png" alt="real_ocr_eval_baseline_struct_v1 preview" />
+              <div class="mini-grid">
+                <div><span>OCR 准确率</span><strong>0.6000</strong></div>
+                <div><span>CER</span><strong>0.3234</strong></div>
+                <div><span>WER</span><strong>1.5500</strong></div>
+                <div><span>样本数</span><strong>5</strong></div>
+                <div><span>总耗时</span><strong>88.5506</strong></div>
+                <div><span>扩散平均耗时</span><strong>16.5124</strong></div>
+              </div>
+              <div class="actions"><a class="btn" href="../eval_outputs/real_ocr_eval_baseline_struct_v1/real_ocr_report.html" target="_blank">打开报告</a><a class="btn secondary" href="../eval_outputs/real_ocr_eval_baseline_struct_v1" target="_blank">打开目录</a></div>
+            </article>
+            
+            <article class="card">
+              <div class="card-top">
+                <div>
+                  <div class="eyebrow">实验</div>
+                  <h3>real_ocr_eval_text_prior_v2</h3>
+                </div>
+                <div class="path">eval_outputs/real_ocr_eval_text_prior_v2</div>
+              </div>
+              <img class="preview" src="../eval_outputs/real_ocr_eval_text_prior_v2/comparisons/eval_001_compare.png" alt="real_ocr_eval_text_prior_v2 preview" />
+              <div class="mini-grid">
+                <div><span>OCR 准确率</span><strong>0.6000</strong></div>
+                <div><span>CER</span><strong>0.3234</strong></div>
+                <div><span>WER</span><strong>1.5500</strong></div>
+                <div><span>样本数</span><strong>5</strong></div>
+                <div><span>总耗时</span><strong>216.89</strong></div>
+                <div><span>扩散平均耗时</span><strong>42.4970</strong></div>
+              </div>
+              <div class="actions"><a class="btn" href="../eval_outputs/real_ocr_eval_text_prior_v2/real_ocr_report.html" target="_blank">打开报告</a><a class="btn secondary" href="../eval_outputs/real_ocr_eval_text_prior_v2" target="_blank">打开目录</a></div>
+            </article>
+            
+            <article class="card">
+              <div class="card-top">
+                <div>
+                  <div class="eyebrow">实验</div>
+                  <h3>real_ocr_eval_v2</h3>
+                </div>
+                <div class="path">eval_outputs/real_ocr_eval_v2</div>
+              </div>
+              <img class="preview" src="../eval_outputs/real_ocr_eval_v2/comparisons/eval_001_compare.png" alt="real_ocr_eval_v2 preview" />
+              <div class="mini-grid">
+                <div><span>OCR 准确率</span><strong>-</strong></div>
+                <div><span>CER</span><strong>-</strong></div>
+                <div><span>WER</span><strong>-</strong></div>
+                <div><span>样本数</span><strong>-</strong></div>
+                <div><span>总耗时</span><strong>-</strong></div>
+                <div><span>扩散平均耗时</span><strong>-</strong></div>
+              </div>
+              <div class="actions"><a class="btn secondary" href="../eval_outputs/real_ocr_eval_v2" target="_blank">打开目录</a></div>
+            </article>
+            
+            <article class="card">
+              <div class="card-top">
+                <div>
+                  <div class="eyebrow">实验</div>
+                  <h3>real_ocr_eval_v2_baseline</h3>
+                </div>
+                <div class="path">eval_outputs/real_ocr_eval_v2_baseline</div>
+              </div>
+              <img class="preview" src="../eval_outputs/real_ocr_eval_v2_baseline/comparisons/eval_001_compare.png" alt="real_ocr_eval_v2_baseline preview" />
+              <div class="mini-grid">
+                <div><span>OCR 准确率</span><strong>0.2917</strong></div>
+                <div><span>CER</span><strong>0.4951</strong></div>
+                <div><span>WER</span><strong>1.3205</strong></div>
+                <div><span>样本数</span><strong>24</strong></div>
+                <div><span>总耗时</span><strong>945.80</strong></div>
+                <div><span>扩散平均耗时</span><strong>32.7058</strong></div>
+              </div>
+              <div class="actions"><a class="btn" href="../eval_outputs/real_ocr_eval_v2_baseline/real_ocr_report.html" target="_blank">打开报告</a><a class="btn secondary" href="../eval_outputs/real_ocr_eval_v2_baseline" target="_blank">打开目录</a></div>
+            </article>
+            
+            <article class="card">
+              <div class="card-top">
+                <div>
+                  <div class="eyebrow">实验</div>
+                  <h3>real_ocr_eval_v2_text_prior_v2</h3>
+                </div>
+                <div class="path">eval_outputs/real_ocr_eval_v2_text_prior_v2</div>
+              </div>
+              <img class="preview" src="../eval_outputs/real_ocr_eval_v2_text_prior_v2/comparisons/eval_001_compare.png" alt="real_ocr_eval_v2_text_prior_v2 preview" />
+              <div class="mini-grid">
+                <div><span>OCR 准确率</span><strong>0.6250</strong></div>
+                <div><span>CER</span><strong>0.0932</strong></div>
+                <div><span>WER</span><strong>0.4615</strong></div>
+                <div><span>样本数</span><strong>24</strong></div>
+                <div><span>总耗时</span><strong>820.75</strong></div>
+                <div><span>扩散平均耗时</span><strong>28.0830</strong></div>
+              </div>
+              <div class="actions"><a class="btn" href="../eval_outputs/real_ocr_eval_v2_text_prior_v2/real_ocr_report.html" target="_blank">打开报告</a><a class="btn secondary" href="../eval_outputs/real_ocr_eval_v2_text_prior_v2" target="_blank">打开目录</a></div>
+            </article>
+            
+            <article class="card">
+              <div class="card-top">
+                <div>
+                  <div class="eyebrow">实验</div>
+                  <h3>real_ocr_eval_v2_text_prior_v3</h3>
+                </div>
+                <div class="path">eval_outputs/real_ocr_eval_v2_text_prior_v3</div>
+              </div>
+              <img class="preview" src="../eval_outputs/real_ocr_eval_v2_text_prior_v3/comparisons/eval_001_compare.png" alt="real_ocr_eval_v2_text_prior_v3 preview" />
+              <div class="mini-grid">
+                <div><span>OCR 准确率</span><strong>0.6250</strong></div>
+                <div><span>CER</span><strong>0.0964</strong></div>
+                <div><span>WER</span><strong>0.4824</strong></div>
+                <div><span>样本数</span><strong>24</strong></div>
+                <div><span>总耗时</span><strong>544.86</strong></div>
+                <div><span>扩散平均耗时</span><strong>17.0601</strong></div>
+              </div>
+              <div class="actions"><a class="btn" href="../eval_outputs/real_ocr_eval_v2_text_prior_v3/real_ocr_report.html" target="_blank">打开报告</a><a class="btn secondary" href="../eval_outputs/real_ocr_eval_v2_text_prior_v3" target="_blank">打开目录</a></div>
+            </article>
+            
+            <article class="card">
+              <div class="card-top">
+                <div>
+                  <div class="eyebrow">实验</div>
+                  <h3>triple_compare_real</h3>
+                </div>
+                <div class="path">eval_outputs/triple_compare_real</div>
+              </div>
+              
+              <div class="mini-grid">
+                <div><span>OCR 准确率</span><strong>-</strong></div>
+                <div><span>CER</span><strong>-</strong></div>
+                <div><span>WER</span><strong>-</strong></div>
+                <div><span>样本数</span><strong>-</strong></div>
+                <div><span>总耗时</span><strong>2.8750</strong></div>
+                <div><span>扩散平均耗时</span><strong>-</strong></div>
+              </div>
+              <div class="actions"><a class="btn secondary" href="../eval_outputs/triple_compare_real" target="_blank">打开目录</a></div>
+            </article>
+            
+            <article class="card">
+              <div class="card-top">
+                <div>
+                  <div class="eyebrow">实验</div>
+                  <h3>triple_compare_train</h3>
+                </div>
+                <div class="path">eval_outputs/triple_compare_train</div>
+              </div>
+              
+              <div class="mini-grid">
+                <div><span>OCR 准确率</span><strong>-</strong></div>
+                <div><span>CER</span><strong>-</strong></div>
+                <div><span>WER</span><strong>-</strong></div>
+                <div><span>样本数</span><strong>-</strong></div>
+                <div><span>总耗时</span><strong>15.0780</strong></div>
+                <div><span>扩散平均耗时</span><strong>-</strong></div>
+              </div>
+              <div class="actions"><a class="btn secondary" href="../eval_outputs/triple_compare_train" target="_blank">打开目录</a></div>
+            </article>
+            
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>OCR 汇总表</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>实验</th>
+              <th>样本数</th>
+              <th>准确率</th>
+              <th>CER</th>
+              <th>WER</th>
+              <th>目录</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+            <tr>
+              <td>baseline_280_realcheck</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>eval_outputs/baseline_280_realcheck</td>
+            </tr>
+            
+            <tr>
+              <td>baseline_280_traincheck</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>eval_outputs/baseline_280_traincheck</td>
+            </tr>
+            
+            <tr>
+              <td>baseline_struct_v1_visual</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>eval_outputs/baseline_struct_v1_visual</td>
+            </tr>
+            
+            <tr>
+              <td>check_baseline</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>eval_outputs/check_baseline</td>
+            </tr>
+            
+            <tr>
+              <td>check_mask_v1</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>eval_outputs/check_mask_v1</td>
+            </tr>
+            
+            <tr>
+              <td>check_mask_v2</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>eval_outputs/check_mask_v2</td>
+            </tr>
+            
+            <tr>
+              <td>cmp_local</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>eval_outputs/cmp_local</td>
+            </tr>
+            
+            <tr>
+              <td>cmp_x1</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>eval_outputs/cmp_x1</td>
+            </tr>
+            
+            <tr>
+              <td>debug_baseline_001</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>eval_outputs/debug_baseline_001</td>
+            </tr>
+            
+            <tr>
+              <td>debug_real_v2</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>eval_outputs/debug_real_v2</td>
+            </tr>
+            
+            <tr>
+              <td>debug_train_domain</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>eval_outputs/debug_train_domain</td>
+            </tr>
+            
+            <tr>
+              <td>debug_train_domain_v2</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>eval_outputs/debug_train_domain_v2</td>
+            </tr>
+            
+            <tr>
+              <td>real_ocr_eval</td>
+              <td>5</td>
+              <td>0.6000</td>
+              <td>0.3234</td>
+              <td>1.5500</td>
+              <td>eval_outputs/real_ocr_eval</td>
+            </tr>
+            
+            <tr>
+              <td>real_ocr_eval_baseline_recog_v1</td>
+              <td>5</td>
+              <td>0.6000</td>
+              <td>0.3234</td>
+              <td>1.5500</td>
+              <td>eval_outputs/real_ocr_eval_baseline_recog_v1</td>
+            </tr>
+            
+            <tr>
+              <td>real_ocr_eval_baseline_struct_v1</td>
+              <td>5</td>
+              <td>0.6000</td>
+              <td>0.3234</td>
+              <td>1.5500</td>
+              <td>eval_outputs/real_ocr_eval_baseline_struct_v1</td>
+            </tr>
+            
+            <tr>
+              <td>real_ocr_eval_text_prior_v2</td>
+              <td>5</td>
+              <td>0.6000</td>
+              <td>0.3234</td>
+              <td>1.5500</td>
+              <td>eval_outputs/real_ocr_eval_text_prior_v2</td>
+            </tr>
+            
+            <tr>
+              <td>real_ocr_eval_v2</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>eval_outputs/real_ocr_eval_v2</td>
+            </tr>
+            
+            <tr>
+              <td>real_ocr_eval_v2_baseline</td>
+              <td>24</td>
+              <td>0.2917</td>
+              <td>0.4951</td>
+              <td>1.3205</td>
+              <td>eval_outputs/real_ocr_eval_v2_baseline</td>
+            </tr>
+            
+            <tr>
+              <td>real_ocr_eval_v2_text_prior_v2</td>
+              <td>24</td>
+              <td>0.6250</td>
+              <td>0.0932</td>
+              <td>0.4615</td>
+              <td>eval_outputs/real_ocr_eval_v2_text_prior_v2</td>
+            </tr>
+            
+            <tr>
+              <td>real_ocr_eval_v2_text_prior_v3</td>
+              <td>24</td>
+              <td>0.6250</td>
+              <td>0.0964</td>
+              <td>0.4824</td>
+              <td>eval_outputs/real_ocr_eval_v2_text_prior_v3</td>
+            </tr>
+            
+            <tr>
+              <td>triple_compare_real</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>eval_outputs/triple_compare_real</td>
+            </tr>
+            
+            <tr>
+              <td>triple_compare_train</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>eval_outputs/triple_compare_train</td>
+            </tr>
+            
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>最近的模型权重</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>权重文件</th>
+              <th>大小 (MB)</th>
+              <th>路径</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+            <tr>
+              <td>text_prior_v3_best.pth</td>
+              <td>772.15</td>
+              <td>model/text_prior_v3_best.pth</td>
+            </tr>
+            
+            <tr>
+              <td>text_prior_v2_latest.pth</td>
+              <td>763.97</td>
+              <td>model/text_prior_v2_latest.pth</td>
+            </tr>
+            
+            <tr>
+              <td>baseline_recog_v1_best.pth</td>
+              <td>763.96</td>
+              <td>model/baseline_recog_v1_best.pth</td>
+            </tr>
+            
+            <tr>
+              <td>baseline_struct_v1_best.pth</td>
+              <td>763.96</td>
+              <td>model/baseline_struct_v1_best.pth</td>
+            </tr>
+            
+            <tr>
+              <td>baseline_struct_v1_latest.pth</td>
+              <td>63.78</td>
+              <td>model/baseline_struct_v1_latest.pth</td>
+            </tr>
+            
+            <tr>
+              <td>mask_textsr_latest.pth</td>
+              <td>763.96</td>
+              <td>model/mask_textsr_latest.pth</td>
+            </tr>
+            
+            <tr>
+              <td>diffusion_textzoom_bs8_latest.pth</td>
+              <td>763.96</td>
+              <td>model/diffusion_textzoom_bs8_latest.pth</td>
+            </tr>
+            
+            <tr>
+              <td>baseline_textsr_best.pth</td>
+              <td>763.96</td>
+              <td>model/baseline_textsr_best.pth</td>
+            </tr>
+            
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</body>
+</html>
